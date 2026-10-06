@@ -1,0 +1,122 @@
+name: Gerar APK
+on:
+  schedule:
+    - cron: '17 9 * * *' # todo dia: gera o APK de quem ainda não tem
+  workflow_dispatch:
+    inputs:
+      donos:
+        description: 'novos = só quem ainda não tem APK (automático). todos = refaz todos. Ou uma lista separada por vírgula (ex.: padrao,joao).'
+        type: string
+        default: 'novos'
+      emulador:
+        description: 'Incluir suporte ao emulador do PC (x86_64)? Deixa o APK bem maior. Para TV/celular/box deixe false.'
+        type: boolean
+        default: false
+permissions:
+  contents: write
+jobs:
+  lista:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+      count: ${{ steps.m.outputs.count }}
+    steps:
+      - name: Garantir a release apks (onde ficam os downloads)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release view apks --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || gh release create apks --repo "$GITHUB_REPOSITORY" --title "APKs" --notes "APKs gerados por dono do Web Player"
+      - id: m
+        env:
+          DONOS: ${{ inputs.donos }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PANEL=$(curl -fsSL https://raw.githubusercontent.com/plustvuhd/plustv-config/main/plustv.json | python3 -c "import sys,json;print(json.load(sys.stdin)['panel'].rstrip('/'))" || true)
+          if [ -z "$PANEL" ]; then PANEL=https://konnex.business; fi
+          curl -fsSL "$PANEL/api/public/player-owners" -o /tmp/owners.json || echo '{"owners":[]}' > /tmp/owners.json
+          gh release view apks --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' > /tmp/have.txt 2>/dev/null || : > /tmp/have.txt
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os, re
+          raw0 = (os.environ.get('DONOS', '') or '').strip() or 'novos'
+          raw = raw0.lower() if raw0.lower() in ('novos', 'todos') else raw0
+          owners = json.load(open('/tmp/owners.json')).get('owners', [])
+          have = set(open('/tmp/have.txt').read().split())
+          if raw in ('novos', 'todos'):
+              items = [o['ref'] for o in owners if raw == 'todos' or o['file'] not in have]
+          else:
+              items = []
+              for x in re.split(r'[,\s;]+', raw):
+                  x = re.sub(r'[^A-Za-z0-9_-]', '', x.strip())
+                  if x and x not in items:
+                      items.append(x)
+          print('count=' + str(len(items)))
+          print('matrix=' + json.dumps({'owner': items or ['padrao']}))
+          PY
+  build:
+    needs: lista
+    if: needs.lista.outputs.count != '0'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix: ${{ fromJson(needs.lista.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Nome e icone do dono
+        env:
+          REF: ${{ matrix.owner }}
+        run: |
+          PANEL=$(curl -fsSL https://raw.githubusercontent.com/plustvuhd/plustv-config/main/plustv.json | python3 -c "import sys,json;print(json.load(sys.stdin)['panel'].rstrip('/'))" || true)
+          if [ -z "$PANEL" ]; then PANEL=https://konnex.business; fi
+          echo "Painel: $PANEL"
+          OWNER="$REF"
+          if [ "$REF" = "padrao" ]; then OWNER=""; fi
+          Q=""
+          if [ -n "$OWNER" ]; then Q="?owner=$OWNER"; fi
+          SAFE=$(echo "$REF" | tr 'A-Z' 'a-z' | sed 's/[^a-z0-9_-]/-/g')
+          echo "SAFE=$SAFE" >> "$GITHUB_ENV"
+          TITLE=$(curl -fsSL "$PANEL/api/public/player-config$Q" | python3 -c "import sys,json;print(json.load(sys.stdin).get('title') or 'PlusTV Player')" || echo "PlusTV Player")
+          echo "Nome do app: $TITLE"
+          # nome do app (celular/TV)
+          TITLE="$TITLE" python3 - <<'PY'
+          import os
+          from xml.sax.saxutils import escape
+          t = escape(os.environ['TITLE']).replace("'", "\\'")
+          open('app/src/main/res/values/strings.xml', 'w', encoding='utf-8').write('<resources><string name="app_name">' + t + '</string></resources>')
+          PY
+          # app ja abre o Web Player do dono; id proprio para poder instalar varios no mesmo aparelho
+          if [ -n "$OWNER" ]; then
+            sed -i "s/static final String OWNER = \"\";/static final String OWNER = \"$OWNER\";/" app/src/main/java/com/plustv/player/MainActivity.java
+            ID="com.plustv.player.p$(echo "$SAFE" | tr '-' '_')"
+            sed -i "s/applicationId \"com.plustv.player\"/applicationId \"$ID\"/" app/build.gradle
+            echo "applicationId: $ID"
+          fi
+          curl -fsSL "$PANEL/api/public/player-icon/512$Q" -o /tmp/icon.png || true
+          curl -fsSL "$PANEL/api/public/player-icon/banner$Q" -o /tmp/banner.png || true
+          if [ -s /tmp/icon.png ] && [ "$(stat -c%s /tmp/icon.png)" -gt 1000 ]; then cp /tmp/icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png; echo "icone atualizado"; fi
+          if [ -s /tmp/banner.png ] && [ "$(stat -c%s /tmp/banner.png)" -gt 1000 ]; then cp /tmp/banner.png app/src/main/res/drawable/banner.png; echo "banner atualizado"; fi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Aceitar licencas do Android SDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.9
+      - name: Gerar APK
+        run: |
+          ABIS=armeabi-v7a,arm64-v8a
+          if [ "${{ inputs.emulador }}" = "true" ]; then ABIS=$ABIS,x86_64,x86; fi
+          echo "Arquiteturas: $ABIS"
+          gradle assembleRelease --no-daemon -Pabis=$ABIS
+      - name: Renomear e publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          cp "$APK" "PlusTV-$SAFE.apk"
+          gh release upload apks "PlusTV-$SAFE.apk" --clobber --repo "$GITHUB_REPOSITORY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PlusTV-${{ matrix.owner }}-apk
+          path: PlusTV-*.apk
