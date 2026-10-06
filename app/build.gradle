@@ -1,0 +1,36 @@
+plugins { id 'com.android.application' }
+// Só as arquiteturas das TVs/celulares/boxes (ARM) — o libVLC traz uma cópia por arquitetura e é o que deixava o APK enorme.
+// Para o emulador do PC, gere com -Pabis=armeabi-v7a,arm64-v8a,x86_64 (opção no Actions).
+def abiList = (project.findProperty('abis') ?: 'armeabi-v7a,arm64-v8a').toString().split(',')
+android {
+    namespace 'com.plustv.player'
+    compileSdk 34
+    defaultConfig {
+        applicationId "com.plustv.player"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+        ndk { abiFilters(*abiList) }
+    }
+    signingConfigs {
+        release {
+            // Chave incluída no projeto (app/plustv.keystore) para o APK sempre ter a mesma assinatura e poder ser atualizado por cima.
+            // Para a Play Store/Amazon, gere sua própria chave e troque estes valores (veja LEIA-ME).
+            storeFile file("plustv.keystore"); storePassword "plustv123"; keyAlias "plustv"; keyPassword "plustv123"
+        }
+    }
+    buildTypes { release { signingConfig signingConfigs.release; minifyEnabled false } }
+    lint { abortOnError false; checkReleaseBuilds false }
+    packagingOptions { jniLibs { pickFirsts += ['**/libc++_shared.so'] } }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
+}
+
+dependencies {
+    // Players embutidos no app: ExoPlayer (Media3) e VLC (libVLC)
+    implementation 'androidx.media3:media3-exoplayer:1.4.1'
+    implementation 'androidx.media3:media3-exoplayer-hls:1.4.1'
+    implementation 'androidx.media3:media3-ui:1.4.1'
+    implementation 'androidx.media3:media3-datasource:1.4.1'
+    implementation 'org.videolan.android:libvlc-all:3.6.0'
+}
