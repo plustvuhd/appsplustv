@@ -199,11 +199,11 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
-        // TV box / Fire Stick: abre o app NATIVO (listas e player em Android puro, sem WebView). Smart TV e celular seguem na versão web.
+        // Padrão: versão web do painel (visual clássico ou Netflix, escolhido nas configurações). O player de vídeo continua sendo o ExoPlayer nativo.
         {
             SharedPreferences sp0 = getSharedPreferences("plustv", MODE_PRIVATE);
             String mode = sp0.getString("ui_mode", "");
-            if (!"web".equals(mode)) {
+            if ("native_on".equals(mode)) { // o app nativo fica desligado por padrão: abre a versão web (clássica / Netflix) em todos os aparelhos
                 startActivity(new Intent(this, Net.Sess.load(this) != null ? NHome.class : NLogin.class));
                 finish();
                 return;
