@@ -21,7 +21,9 @@ import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.datasource.DefaultHttpDataSource;
+import androidx.media3.exoplayer.DefaultLoadControl;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.SeekParameters;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.ui.PlayerView;
 
@@ -61,18 +63,33 @@ public class PlayerActivity extends Activity {
     private ProgressBar bar;
     private View overlay;
     private String curEngine = "";
+    private long bufSince = 0, okMs = 0;
+    private int retries = 0; // tentativas de reabrir no mesmo ponto (filme/série) depois de um erro de rede
+    private TextView fitBtn;
 
     private final Handler h = new Handler(Looper.getMainLooper());
     private long pending = -1; // posição escolhida com as setas; só aplica quando para de apertar
     private final Runnable commitSeek = () -> { if (pending >= 0) { seekToMs(pending); pending = -1; } };
     private final Runnable hideOverlay = () -> overlay.setVisibility(View.GONE);
-    private final Runnable timeout = () -> { if (!playedOnce && !finished) tryNext(); };
+    private final Runnable timeout = () -> { if (!playedOnce && !finished) { if (!live && startMs > 0 && retries < 4) onEngineErrorFromStart(); else tryNext(); } };
     private final Runnable ticker = new Runnable() {
         @Override public void run() {
             if (finished) return;
             long p = pos(), d = dur();
             if (p > 0) lastPos = p;
             if (d > 0) lastDur = d;
+            try {
+                if (exo != null && playedOnce) {
+                    int st = exo.getPlaybackState();
+                    if (st == Player.STATE_BUFFERING && exo.getPlayWhenReady()) {
+                        if (bufSince == 0) bufSince = System.currentTimeMillis();
+                        else if (!live && System.currentTimeMillis() - bufSince > 15000) { bufSince = 0; onEngineError(); }
+                    } else {
+                        bufSince = 0;
+                        if (st == Player.STATE_READY && exo.getPlayWhenReady()) { okMs += 500; if (okMs > 20000) { retries = 0; okMs = 0; } }
+                    }
+                }
+            } catch (Throwable ignored) {}
             if (overlay.getVisibility() == View.VISIBLE) {
                 long sh = pending >= 0 ? pending : p;
                 timeTv.setText(live ? "AO VIVO" : fmt(sh) + " / " + fmt(d));
@@ -159,7 +176,8 @@ public class PlayerActivity extends Activity {
         for (int i = 0; i < lb.length; i++) {
             final int idx = i;
             TextView t = new TextView(this);
-            t.setText(lb[i]);
+            t.setText(i == 3 ? fitLabel() : lb[i]);
+            if (i == 3) fitBtn = t;
             t.setTextColor(Color.WHITE);
             t.setTextSize(20);
             t.setGravity(Gravity.CENTER);
@@ -205,12 +223,34 @@ public class PlayerActivity extends Activity {
         seekedStart = false;
         status.setText("Sintonizando…");
         status.setVisibility(View.VISIBLE);
+        h.removeCallbacks(dotsAnim);
+        h.post(dotsAnim);
         h.removeCallbacks(timeout);
         h.postDelayed(timeout, 25000);
         try {
             if ("exo".equals(c[0])) startExo(c[1]); else startVlc(c[1]);
         } catch (Throwable t) { h.post(this::tryNext); }
     }
+
+    /** Erro depois de já ter tocado (filme/série, ex.: ao avançar o servidor recusa a nova conexão na hora): reabre o MESMO endereço na posição em que estava, antes de trocar de motor/formato. */
+    private void onEngineError() {
+        if (finished) return;
+        if (!live && playedOnce && retries < 4 && idx >= 0 && idx < combos.size()) {
+            retries++;
+            long at = pending >= 0 ? pending : Math.max(pos(), lastPos);
+            pending = -1;
+            startMs = at;
+            final int again = idx - 1; // tryNext incrementa
+            status.setText("Sintonizando…");
+            status.setVisibility(View.VISIBLE);
+            h.removeCallbacks(timeout);
+            h.postDelayed(() -> { if (finished) return; idx = again; tryNext(); }, 900L * retries);
+            return;
+        }
+        tryNext();
+    }
+
+    private void onEngineErrorFromStart() { retries++; final int again = idx - 1; h.postDelayed(() -> { if (finished) return; idx = again; tryNext(); }, 600L); }
 
     private void onPlaying() {
         if (!playedOnce) h.post(this::showOverlay);
@@ -224,18 +264,23 @@ public class PlayerActivity extends Activity {
         exoView.setVisibility(View.VISIBLE);
         DefaultHttpDataSource.Factory http = new DefaultHttpDataSource.Factory()
             .setUserAgent(UA).setAllowCrossProtocolRedirects(true).setConnectTimeoutMs(15000).setReadTimeoutMs(20000);
-        exo = new ExoPlayer.Builder(this).setMediaSourceFactory(new DefaultMediaSourceFactory(http)).build();
+        DefaultLoadControl lc = new DefaultLoadControl.Builder()
+            .setBufferDurationsMs(live ? 15000 : 20000, live ? 40000 : 50000, 1200, 2000) // começa a tocar com ~1s e volta rápido depois de avançar
+            .build();
+        exo = new ExoPlayer.Builder(this).setMediaSourceFactory(new DefaultMediaSourceFactory(http)).setLoadControl(lc).build();
+        exo.setSeekParameters(SeekParameters.CLOSEST_SYNC); // avançar/voltar vai para o quadro-chave mais perto (bem mais rápido)
         exoView.setPlayer(exo);
         exo.setMediaItem(MediaItem.fromUri(Uri.parse(url)));
         if (startMs > 0 && !live) exo.seekTo(startMs);
         exo.addListener(new Player.Listener() {
             @Override public void onPlaybackStateChanged(int st) {
-                if (st == Player.STATE_READY) onPlaying();
+                if (st == Player.STATE_READY) { onPlaying(); applyFit(); }
                 else if (st == Player.STATE_ENDED) {
                     if (live) h.post(PlayerActivity.this::tryNext); else finishWith(true, false);
                 }
             }
-            @Override public void onPlayerError(PlaybackException e) { h.post(PlayerActivity.this::tryNext); }
+            @Override public void onVideoSizeChanged(androidx.media3.common.VideoSize vs) { applyFit(); }
+            @Override public void onPlayerError(PlaybackException e) { onEngineError(); }
         });
         exo.prepare();
         exo.setPlayWhenReady(true);
@@ -261,10 +306,15 @@ public class PlayerActivity extends Activity {
             switch (ev.type) {
                 case MediaPlayer.Event.Playing:
                     onPlaying();
+                    applyFit();
+                    h.postDelayed(this::applyFit, 700);
                     if (startMs > 0 && !live && !seekedStart && vlc != null) { seekedStart = true; vlc.setTime(startMs); }
                     break;
+                case MediaPlayer.Event.Vout:
+                    applyFit();
+                    break;
                 case MediaPlayer.Event.EncounteredError:
-                    h.post(this::tryNext);
+                    h.post(this::onEngineError);
                     break;
                 case MediaPlayer.Event.EndReached:
                     if (live) h.post(this::tryNext); else finishWith(true, false);
@@ -319,7 +369,7 @@ public class PlayerActivity extends Activity {
         if (d > 0) t = Math.min(t, d - 1000);
         pending = t;
         h.removeCallbacks(commitSeek);
-        h.postDelayed(commitSeek, 800);
+        h.postDelayed(commitSeek, 450);
         long p = d > 0 ? t * 1000 / d : 0;
         bar.setProgress((int) p);
         timeTv.setText(fmt(t) + " / " + fmt(d));
@@ -342,10 +392,13 @@ public class PlayerActivity extends Activity {
         try { if (vlc != null) vlc.setVideoScale(fitMode == 0 ? MediaPlayer.ScaleType.SURFACE_BEST_FIT : fitMode == 1 ? MediaPlayer.ScaleType.SURFACE_FIT_SCREEN : MediaPlayer.ScaleType.SURFACE_FILL); } catch (Throwable ignored) {}
     }
 
+    private String fitLabel() { return fitMode == 0 ? "Proporção: Ajustar" : fitMode == 1 ? "Proporção: Preencher" : "Proporção: Esticar"; }
+
     private void cycleFit() {
         fitMode = (fitMode + 1) % 3;
         applyFit();
-        status.setText(fitMode == 0 ? "Proporção: Ajustar" : fitMode == 1 ? "Proporção: Preencher" : "Proporção: Esticar");
+        if (fitBtn != null) fitBtn.setText(fitLabel());
+        status.setText(fitLabel());
         status.setVisibility(View.VISIBLE);
         h.removeCallbacks(hideStatus);
         h.postDelayed(hideStatus, 1500);
