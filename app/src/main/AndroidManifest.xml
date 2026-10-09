@@ -23,6 +23,23 @@
             </intent-filter>
         </activity>
         <activity
+            android:name=".NLogin"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|navigation|uiMode|smallestScreenSize|screenLayout"
+            android:screenOrientation="landscape"
+            android:windowSoftInputMode="adjustPan" />
+        <activity
+            android:name=".NHome"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|navigation|uiMode|smallestScreenSize|screenLayout"
+            android:screenOrientation="landscape" />
+        <activity
+            android:name=".NDetail"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|navigation|uiMode|smallestScreenSize|screenLayout"
+            android:screenOrientation="landscape" />
+        <activity
             android:name=".PlayerActivity"
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboard|keyboardHidden|navigation|uiMode|smallestScreenSize|screenLayout"

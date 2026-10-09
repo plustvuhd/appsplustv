@@ -21,6 +21,15 @@ import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.net.Uri;
+import androidx.media3.common.MediaItem;
+import androidx.media3.common.Player;
+import androidx.media3.common.PlaybackException;
+import androidx.media3.datasource.DefaultHttpDataSource;
+import androidx.media3.exoplayer.DefaultLoadControl;
+import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
+import androidx.media3.ui.PlayerView;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -50,22 +59,121 @@ public class MainActivity extends Activity {
     private WebChromeClient.CustomViewCallback customCb;
     private boolean pageOk = false;
     private boolean nativePlaying = false;
+    // Prévia do canal dentro da lista: player nativo desenhado por cima do WebView (o vídeo do WebView ficava preto, só com som, em TV box/Fire Stick)
+    private ExoPlayer pvExo;
+    private FrameLayout pvView;
+    private androidx.media3.ui.AspectRatioFrameLayout pvArf;
+    private android.view.TextureView pvTex;
+    private String pvKey = "";
+    private java.util.List<String> pvUrls = new ArrayList<>();
+    private int pvIdx = 0;
     private static final int REQ_PLAY = 77;
+
+    private void showPrompt(String hint, String initial, final String id) {
+        try {
+            final android.widget.EditText et = new android.widget.EditText(this);
+            et.setSingleLine(true);
+            et.setText(initial == null ? "" : initial);
+            et.setSelection(et.getText().length());
+            et.setHint(hint == null ? "" : hint);
+            et.setTextSize(22);
+            et.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
+            final boolean[] sent = {false};
+            final android.app.AlertDialog dlg = new android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle(hint == null || hint.isEmpty() ? "Digite" : hint)
+                .setView(et)
+                .setPositiveButton("OK", (d, w) -> { if (!sent[0]) { sent[0] = true; promptDone(id, et.getText().toString()); } })
+                .setNegativeButton("Cancelar", (d, w) -> { if (!sent[0]) { sent[0] = true; promptDone(id, null); } })
+                .setOnCancelListener(d -> { if (!sent[0]) { sent[0] = true; promptDone(id, null); } })
+                .create();
+            et.setOnEditorActionListener((v, a, e) -> { if (!sent[0]) { sent[0] = true; promptDone(id, et.getText().toString()); } dlg.dismiss(); return true; });
+            dlg.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+            dlg.show();
+            et.requestFocus();
+            et.postDelayed(() -> { try { android.view.inputmethod.InputMethodManager im = (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE); if (im != null) im.showSoftInput(et, android.view.inputmethod.InputMethodManager.SHOW_FORCED); } catch (Throwable ignored) {} }, 150);
+        } catch (Throwable t) { promptDone(id, null); }
+    }
+
+    private void promptDone(String id, String text) {
+        final String js = "window.__ptDone&&window.__ptDone(" + org.json.JSONObject.quote(id) + "," + (text == null ? "null" : org.json.JSONObject.quote(text)) + ")";
+        web.post(() -> web.evaluateJavascript(js, null));
+    }
+
+    private void pvState(String st) {
+        final String js = "window.__pvState&&window.__pvState('" + st + "')";
+        web.post(() -> web.evaluateJavascript(js, null));
+    }
+
+    private Boolean boxCache;
+    private boolean detectBox() {
+        if (boxCache != null) return boxCache;
+        boolean box = false;
+        try {
+            String man = (android.os.Build.MANUFACTURER + "").toLowerCase(java.util.Locale.ROOT);
+            String brand = (android.os.Build.BRAND + "").toLowerCase(java.util.Locale.ROOT);
+            String model = (android.os.Build.MODEL + "").toLowerCase(java.util.Locale.ROOT);
+            String dev = (android.os.Build.DEVICE + "").toLowerCase(java.util.Locale.ROOT);
+            String hw = ((android.os.Build.HARDWARE + " " + android.os.Build.BOARD) + "").toLowerCase(java.util.Locale.ROOT);
+            String all = man + " " + brand + " " + model + " " + dev;
+            android.app.UiModeManager um = (android.app.UiModeManager) getSystemService(android.content.Context.UI_MODE_SERVICE);
+            boolean tv = um != null && um.getCurrentModeType() == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION;
+            boolean leanback = getPackageManager().hasSystemFeature("android.software.leanback");
+            if (!tv && !leanback) { boxCache = false; return false; } // celular / tablet
+            // Fire Stick / Fire TV
+            if (all.contains("amazon") || model.startsWith("aft")) box = true;
+            // Smart TVs conhecidas (marcas que fabricam televisor): nunca são box
+            else if (all.matches(".*(philco|tcl|sony|samsung|lg|hisense|xiaomi|semp|aoc|panasonic|toshiba|sharp|philips|jvc|vizio|sanyo|multilaser tv|britania|ptv|vidaa).*")) box = false;
+            else {
+                // Nomes e chips típicos de TV box genérica
+                if (all.matches(".*(box|x96|mxq|t95|h96|tx3|tx6|tx9|mecool|transpeed|ugoos|beelink|a95|m8s|hk1|magicsee|vontar|q96|h20|s905|s912|rk3|h616|h618|h313).*")
+                        || hw.matches(".*(amlogic|meson|rk3|rockchip|sun50|allwinner|s905|s922|gxl|g12).*")) box = true;
+                android.app.ActivityManager am = (android.app.ActivityManager) getSystemService(android.content.Context.ACTIVITY_SERVICE);
+                if (am != null) {
+                    android.app.ActivityManager.MemoryInfo mi = new android.app.ActivityManager.MemoryInfo();
+                    am.getMemoryInfo(mi);
+                    if (am.isLowRamDevice() || mi.totalMem < 1700L * 1024 * 1024) box = true;
+                }
+            }
+        } catch (Throwable ignored) {}
+        boxCache = box;
+        return box;
+    }
 
     /** Ponte para o site: o Web Player chama PlusTVNative.play(json) para tocar com ExoPlayer/VLC embutidos. */
     private class Bridge {
         @JavascriptInterface public boolean ok() { return true; }
+        /** true = TV box / Fire Stick (aparelho fraco); false = smart TV, celular e tablet. */
+        @JavascriptInterface public boolean isBox() { return detectBox(); }
+        @JavascriptInterface public String version() { return "2.4"; }
+        /** Teclado garantido na TV/box: caixa de texto nativa. O resultado volta para a página em window.__ptDone(id, texto|null). */
+        @JavascriptInterface public void promptText(final String hint, final String initial, final String id) {
+            runOnUiThread(() -> showPrompt(hint, initial, id));
+        }
         @JavascriptInterface public void showKeyboard() {
             runOnUiThread(() -> {
                 try {
                     web.requestFocus();
-                    android.view.inputmethod.InputMethodManager im = (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
-                    if (im != null) im.showSoftInput(web, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+                    final android.view.inputmethod.InputMethodManager im = (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+                    if (im != null) {
+                        im.showSoftInput(web, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+                        // TV box / Fire Stick: o pedido implícito costuma ser ignorado; reforça forçando logo depois
+                        web.postDelayed(() -> { try { web.requestFocus(); im.showSoftInput(web, android.view.inputmethod.InputMethodManager.SHOW_FORCED); } catch (Throwable ignored) {} }, 180);
+                    }
                 } catch (Throwable ignored) {}
             });
         }
+        @JavascriptInterface public void previewPlay(final String json, final float l, final float t, final float w, final float h) {
+            runOnUiThread(() -> startPreview(json, l, t, w, h));
+        }
+        @JavascriptInterface public void previewRect(final float l, final float t, final float w, final float h) {
+            runOnUiThread(() -> placePreview(l, t, w, h));
+        }
+        @JavascriptInterface public void previewStop() {
+            runOnUiThread(() -> stopPreview());
+        }
         @JavascriptInterface public void play(final String json) {
             runOnUiThread(() -> {
+                stopPreview();
                 Intent i = new Intent(MainActivity.this, PlayerActivity.class);
                 i.putExtra("json", json);
                 nativePlaying = true;
@@ -91,6 +199,16 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        // TV box / Fire Stick: abre o app NATIVO (listas e player em Android puro, sem WebView). Smart TV e celular seguem na versão web.
+        {
+            SharedPreferences sp0 = getSharedPreferences("plustv", MODE_PRIVATE);
+            String mode = sp0.getString("ui_mode", "");
+            if (!"web".equals(mode)) {
+                startActivity(new Intent(this, Net.Sess.load(this) != null ? NHome.class : NLogin.class));
+                finish();
+                return;
+            }
+        }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.parseColor("#0b0a14"));
@@ -336,7 +454,75 @@ public class MainActivity extends Activity {
         return super.dispatchKeyEvent(ev);
     }
 
-    @Override protected void onPause() { super.onPause(); CookieManager.getInstance().flush(); if (!nativePlaying) web.onPause(); }
-    @Override protected void onResume() { super.onResume(); web.onResume(); }
-    @Override protected void onDestroy() { web.destroy(); super.onDestroy(); }
+    private void placePreview(float l, float t, float w, float h) {
+        if (pvView == null) return;
+        int W = root.getWidth(), H = root.getHeight();
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(Math.max(2, Math.round(w * W)), Math.max(2, Math.round(h * H)));
+        lp.leftMargin = Math.round(l * W);
+        lp.topMargin = Math.round(t * H);
+        pvView.setLayoutParams(lp);
+    }
+
+    private void startPreview(String json, float l, float t, float w, float h) {
+        try {
+            org.json.JSONObject j = new org.json.JSONObject(json);
+            org.json.JSONArray a = j.getJSONArray("urls");
+            String key = j.optString("key", "");
+            if (pvView != null && key.equals(pvKey)) { placePreview(l, t, w, h); return; }
+            stopPreview();
+            pvKey = key;
+            pvUrls = new ArrayList<>();
+            for (int i = 0; i < a.length(); i++) pvUrls.add(a.getString(i));
+            pvIdx = 0;
+            pvView = new FrameLayout(this);
+            pvView.setBackgroundColor(Color.BLACK);
+            pvView.setFocusable(false);
+            pvView.setClickable(false);
+            pvArf = new androidx.media3.ui.AspectRatioFrameLayout(this);
+            pvArf.setResizeMode(androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT);
+            pvTex = new android.view.TextureView(this);
+            pvArf.addView(pvTex, new FrameLayout.LayoutParams(-1, -1));
+            pvView.addView(pvArf, new FrameLayout.LayoutParams(-1, -1, Gravity.CENTER));
+            root.addView(pvView, new FrameLayout.LayoutParams(2, 2));
+            placePreview(l, t, w, h);
+            pvNext();
+        } catch (Throwable ignored) {}
+    }
+
+    private void pvNext() {
+        if (pvView == null) return;
+        if (pvIdx >= pvUrls.size()) return;
+        String u = pvUrls.get(pvIdx++);
+        try {
+            if (pvExo != null) { pvExo.release(); pvExo = null; }
+            DefaultHttpDataSource.Factory http = new DefaultHttpDataSource.Factory()
+                .setUserAgent("VLC/3.0.20 LibVLC/3.0.20").setAllowCrossProtocolRedirects(true).setConnectTimeoutMs(12000).setReadTimeoutMs(15000);
+            DefaultLoadControl lc = new DefaultLoadControl.Builder().build();
+            pvExo = new ExoPlayer.Builder(this).setMediaSourceFactory(new DefaultMediaSourceFactory(http)).setLoadControl(lc).build();
+            pvExo.setVideoTextureView(pvTex);
+            MediaItem.Builder pmb = new MediaItem.Builder().setUri(Uri.parse(u));
+            String lu = u.toLowerCase();
+            if (lu.contains(".m3u8")) pmb.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8); else if (lu.matches(".*\\.ts(\\?.*)?$")) pmb.setMimeType(androidx.media3.common.MimeTypes.VIDEO_MP2T);
+            pvExo.setMediaItem(pmb.build());
+            pvExo.addListener(new Player.Listener() {
+                @Override public void onPlaybackStateChanged(int st) { if (st == Player.STATE_READY) pvState("ok"); }
+                @Override public void onPlayerError(PlaybackException e) { if (pvIdx >= pvUrls.size()) pvState("fail"); runOnUiThread(MainActivity.this::pvNext); }
+                @Override public void onVideoSizeChanged(androidx.media3.common.VideoSize vs) { if (pvArf != null && vs.width > 0 && vs.height > 0) pvArf.setAspectRatio(vs.width * vs.pixelWidthHeightRatio / vs.height); }
+            });
+            pvExo.prepare();
+            pvExo.setPlayWhenReady(true);
+        } catch (Throwable t) { pvNext(); }
+    }
+
+    private void stopPreview() {
+        try { if (pvExo != null) pvExo.release(); } catch (Throwable ignored) {}
+        pvExo = null;
+        try { if (pvView != null) root.removeView(pvView); } catch (Throwable ignored) {}
+        pvView = null; pvArf = null; pvTex = null;
+        pvKey = "";
+    }
+
+    @Override protected void onPause() { super.onPause(); if (web == null) return; stopPreview(); CookieManager.getInstance().flush(); if (!nativePlaying) web.onPause(); }
+    @Override protected void onResume() { super.onResume(); if (web != null) web.onResume(); }
+    @Override protected void onDestroy() { if (web != null) { stopPreview(); web.destroy(); } super.onDestroy(); }
 }
