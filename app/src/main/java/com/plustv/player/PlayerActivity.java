@@ -75,6 +75,7 @@ public class PlayerActivity extends Activity {
         VLC_LEVEL.put(k, level);
         status.setText(why);
         status.setVisibility(View.VISIBLE);
+        tuning(false);
         final int again = idx - 1;
         h.post(() -> { if (finished) return; idx = again; tryNext(); });
     }
@@ -113,6 +114,7 @@ public class PlayerActivity extends Activity {
         BAD_EXO.add(badKey(curUrl));
         status.setText("Vídeo H.265: trocando para o VLC…");
         status.setVisibility(View.VISIBLE);
+        tuning(false);
         tryNext();
     }
 
@@ -135,6 +137,39 @@ public class PlayerActivity extends Activity {
     private PlayerView exoView;
     private VLCVideoLayout vlcView;
     private TextView status, titleTv, timeTv;
+    private Ring ring;
+    /** Círculo de carregamento estilo Netflix (arco vermelho girando). */
+    private static class Ring extends View {
+        private final android.graphics.Paint pt = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        private final android.graphics.RectF rc = new android.graphics.RectF();
+        private android.animation.ObjectAnimator an;
+        Ring(android.content.Context c) {
+            super(c);
+            pt.setStyle(android.graphics.Paint.Style.STROKE);
+            pt.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+            setVisibility(View.GONE);
+        }
+        void spin(boolean on) {
+            if (on) {
+                setVisibility(View.VISIBLE);
+                if (an == null) { an = android.animation.ObjectAnimator.ofFloat(this, "rotation", 0f, 360f); an.setDuration(900); an.setRepeatCount(android.animation.ValueAnimator.INFINITE); an.setInterpolator(new android.view.animation.LinearInterpolator()); }
+                if (!an.isRunning()) an.start();
+            } else {
+                if (an != null) an.cancel();
+                setVisibility(View.GONE);
+            }
+        }
+        @Override protected void onDraw(android.graphics.Canvas cv) {
+            float w = Math.min(getWidth(), getHeight()), sw = w * 0.1f;
+            pt.setStrokeWidth(sw);
+            rc.set(sw, sw, w - sw, w - sw);
+            pt.setColor(0x33FFFFFF);
+            cv.drawArc(rc, 0, 360, false, pt);
+            pt.setColor(0xFFE50914);
+            cv.drawArc(rc, -90, 100, false, pt);
+        }
+    }
+    private void tuning(boolean on) { if (ring != null) ring.spin(on); }
     private ProgressBar bar;
     private View overlay;
     private String curEngine = "";
@@ -276,8 +311,12 @@ public class PlayerActivity extends Activity {
         status.setTextColor(Color.WHITE);
         status.setTextSize(24);
         status.setGravity(Gravity.CENTER);
-        status.setText("Sintonizando…");
+        status.setText("");
         root.addView(status, new FrameLayout.LayoutParams(-1, -1));
+        ring = new Ring(this);
+        FrameLayout.LayoutParams rlp = new FrameLayout.LayoutParams(dp(56), dp(56));
+        rlp.gravity = Gravity.CENTER;
+        root.addView(ring, rlp);
 
         final int ACC = Color.parseColor("#8B5CF6");
         LinearLayout ov = new LinearLayout(this);
@@ -404,6 +443,7 @@ public class PlayerActivity extends Activity {
             root.addView(skipBtn, sp);
         }
         h.post(ticker);
+        tuning(true);
         h.post(dotsAnim);
         if (nativeUi) h.postDelayed(beat, 1500);
         tryNext();
@@ -502,8 +542,8 @@ public class PlayerActivity extends Activity {
         curEngine = c[0];
         playedOnce = false;
         seekedStart = false;
-        status.setText("Sintonizando…");
-        status.setVisibility(View.VISIBLE);
+        status.setText("");
+        tuning(true);
         h.removeCallbacks(dotsAnim);
         h.post(dotsAnim);
         h.removeCallbacks(timeout);
@@ -522,8 +562,8 @@ public class PlayerActivity extends Activity {
             pending = -1;
             startMs = at;
             final int again = idx - 1; // tryNext incrementa
-            status.setText("Sintonizando…");
-            status.setVisibility(View.VISIBLE);
+            status.setText("");
+            tuning(true);
             h.removeCallbacks(timeout);
             h.postDelayed(() -> { if (finished) return; idx = again; tryNext(); }, 900L * retries);
             return;
@@ -538,11 +578,25 @@ public class PlayerActivity extends Activity {
         playedOnce = true;
         h.removeCallbacks(timeout);
         status.setVisibility(View.GONE);
+        tuning(false);
     }
 
     private void startExo(String url) {
         vlcView.setVisibility(View.GONE);
         exoView.setVisibility(View.VISIBLE);
+        // Prévia ao vivo -> tela cheia: reaproveita o ExoPlayer que já está tocando (sem recarregar nem recomeçar)
+        if (live && Handoff.exo != null && url.equals(Handoff.url)) {
+            exo = Handoff.exo;
+            Handoff.exo = null;
+            Handoff.url = null;
+            exoView.setPlayer(exo);
+            exo.addListener(newExoListener());
+            exo.setPlayWhenReady(true);
+            if (exo.getPlaybackState() == Player.STATE_READY) onPlaying();
+            applyFit();
+            return;
+        }
+        Handoff.release();
         DefaultHttpDataSource.Factory http = new DefaultHttpDataSource.Factory()
             .setUserAgent(UA).setAllowCrossProtocolRedirects(true).setConnectTimeoutMs(15000).setReadTimeoutMs(20000);
         // Mesma configuração padrão do ExoPlayer externo (que não trava): carregamento, buffer, extratores e decodificador no padrão da biblioteca.
@@ -556,7 +610,14 @@ public class PlayerActivity extends Activity {
         if (lu.contains(".m3u8")) mib.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8); // sem "adivinhar" o formato: abre mais rápido
         exo.setMediaItem(mib.build());
         if (startMs > 0 && !live) exo.seekTo(startMs);
-        exo.addListener(new Player.Listener() {
+        exo.addListener(newExoListener());
+        exo.prepare();
+        exo.setPlayWhenReady(true);
+        applyFit();
+    }
+
+    private Player.Listener newExoListener() {
+        return new Player.Listener() {
             @Override public void onPlaybackStateChanged(int st) {
                 if (st == Player.STATE_READY) { onPlaying(); applyFit(); }
                 else if (st == Player.STATE_ENDED) {
@@ -573,10 +634,7 @@ public class PlayerActivity extends Activity {
                 if (live && e.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW && exo != null) { exo.seekToDefaultPosition(); exo.prepare(); return; }
                 onEngineError();
             }
-        });
-        exo.prepare();
-        exo.setPlayWhenReady(true);
-        applyFit();
+        };
     }
 
     private void startVlc(String url) {
@@ -746,9 +804,7 @@ public class PlayerActivity extends Activity {
     private final Runnable dotsAnim = new Runnable() {
         @Override public void run() {
             if (finished || playedOnce) return;
-            dots = (dots + 1) % 4;
-            status.setText("Sintonizando" + "...".substring(0, dots));
-            h.postDelayed(this, 450);
+            // só o círculo girando (sem texto "Sintonizando")
         }
     };
     private final Runnable hideStatus = () -> { if (status != null) status.setVisibility(View.GONE); };
@@ -836,6 +892,7 @@ public class PlayerActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        Handoff.release();
         finished = true;
         h.removeCallbacksAndMessages(null);
         releaseEngines();

@@ -69,45 +69,83 @@ public class MainActivity extends Activity {
     private int pvIdx = 0;
     private static final int REQ_PLAY = 77;
 
+    // Teclado SEM caixa: um campo invisível (2x2 px) recebe o foco e abre só o teclado do Android.
+    // O que é digitado aparece ao vivo no campo da própria página (window.__ptLive); Enter/Buscar ou Voltar fecham.
+    private android.widget.EditText kbEt;
+    private String kbId;
+
     private void showPrompt(String hint, String initial, final String id) {
         try {
-            final android.widget.EditText et = new android.widget.EditText(this);
+            finishPrompt();
+            final android.widget.EditText et = new android.widget.EditText(this) {
+                @Override public boolean onKeyPreIme(int keyCode, KeyEvent event) {
+                    if (keyCode == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP) { finishPrompt(); return true; }
+                    return super.onKeyPreIme(keyCode, event);
+                }
+            };
             et.setSingleLine(true);
+            et.setBackgroundColor(Color.TRANSPARENT);
+            et.setTextColor(Color.TRANSPARENT);
+            et.setCursorVisible(false);
+            et.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
+            et.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH | android.view.inputmethod.EditorInfo.IME_FLAG_NO_EXTRACT_UI | android.view.inputmethod.EditorInfo.IME_FLAG_NO_FULLSCREEN);
             et.setText(initial == null ? "" : initial);
             et.setSelection(et.getText().length());
-            et.setHint(hint == null ? "" : hint);
-            et.setTextSize(22);
-            et.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
-            et.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
-            final boolean[] sent = {false};
-            // Sem título nem botões: só a caixa de texto. O teclado abre sozinho, sem precisar clicar de novo; Enter/Buscar confirma.
-            final android.app.AlertDialog dlg = new android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setView(et)
-                .setOnCancelListener(d -> { if (!sent[0]) { sent[0] = true; promptDone(id, null); } })
-                .create();
-            et.setOnEditorActionListener((v, a, e) -> { if (!sent[0]) { sent[0] = true; promptDone(id, et.getText().toString()); } dlg.dismiss(); return true; });
+            et.addTextChangedListener(new android.text.TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence c, int a, int b, int d) {}
+                @Override public void onTextChanged(CharSequence c, int a, int b, int d) {}
+                @Override public void afterTextChanged(android.text.Editable e) { pushLive(id, e.toString()); }
+            });
+            et.setOnEditorActionListener((v, a, e) -> { finishPrompt(); return true; });
             et.setOnKeyListener((v, code, ev) -> {
-                if (ev.getAction() == android.view.KeyEvent.ACTION_DOWN && (code == android.view.KeyEvent.KEYCODE_ENTER) && !sent[0]) { sent[0] = true; promptDone(id, et.getText().toString()); dlg.dismiss(); return true; }
+                if (ev.getAction() == KeyEvent.ACTION_DOWN && code == KeyEvent.KEYCODE_ENTER) { finishPrompt(); return true; }
                 return false;
             });
-            dlg.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN);
-            dlg.show();
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(2, 2);
+            lp.gravity = Gravity.BOTTOM | Gravity.START;
+            root.addView(et, lp);
+            kbEt = et;
+            kbId = id;
             et.requestFocus();
             final android.view.inputmethod.InputMethodManager im = (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
-            final Runnable force = () -> { try { if (dlg.isShowing()) { et.requestFocus(); if (im != null) im.showSoftInput(et, android.view.inputmethod.InputMethodManager.SHOW_FORCED); } } catch (Throwable ignored) {} };
-            et.postDelayed(force, 100);
-            et.postDelayed(force, 400);
-            et.postDelayed(force, 900);
+            final Runnable force = () -> { try { if (kbEt == et) { et.requestFocus(); if (im != null) im.showSoftInput(et, android.view.inputmethod.InputMethodManager.SHOW_FORCED); } } catch (Throwable ignored) {} };
+            et.postDelayed(force, 80);
+            et.postDelayed(force, 350);
+            et.postDelayed(force, 800);
             // TV box que só abre o teclado com o OK no campo: se ainda não abriu, aperta o OK por nós (uma vez)
             et.postDelayed(() -> {
                 try {
-                    if (!dlg.isShowing()) return;
+                    if (kbEt != et) return;
                     boolean vis = false;
                     if (android.os.Build.VERSION.SDK_INT >= 30) { android.view.WindowInsets wi = et.getRootWindowInsets(); vis = wi != null && wi.isVisible(android.view.WindowInsets.Type.ime()); }
-                    if (!vis) { et.dispatchKeyEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_DPAD_CENTER)); et.dispatchKeyEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_DPAD_CENTER)); force.run(); }
+                    if (!vis) { et.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER)); et.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER)); force.run(); }
                 } catch (Throwable ignored) {}
-            }, 1300);
+            }, 1200);
+            // Se o campo perder o foco (teclado fechado de outro jeito), encerra
+            et.postDelayed(() -> { if (kbEt == et) et.setOnFocusChangeListener((v, has) -> { if (!has) finishPrompt(); }); }, 1500);
         } catch (Throwable t) { promptDone(id, null); }
+    }
+
+    private void pushLive(String id, String text) {
+        final String js = "window.__ptLive&&window.__ptLive(" + org.json.JSONObject.quote(id) + "," + org.json.JSONObject.quote(text) + ")";
+        web.post(() -> web.evaluateJavascript(js, null));
+    }
+
+    private void finishPrompt() {
+        final android.widget.EditText et = kbEt;
+        if (et == null) return;
+        final String id = kbId;
+        final String text = et.getText().toString();
+        kbEt = null;
+        kbId = null;
+        try { et.setOnFocusChangeListener(null); } catch (Throwable ignored) {}
+        try {
+            android.view.inputmethod.InputMethodManager im = (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+            if (im != null) im.hideSoftInputFromWindow(et.getWindowToken(), 0);
+        } catch (Throwable ignored) {}
+        try { root.removeView(et); } catch (Throwable ignored) {}
+        try { web.requestFocus(); } catch (Throwable ignored) {}
+        promptDone(id, text);
     }
 
     private void promptDone(String id, String text) {
@@ -160,7 +198,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface public boolean ok() { return true; }
         /** true = TV box / Fire Stick (aparelho fraco); false = smart TV, celular e tablet. */
         @JavascriptInterface public boolean isBox() { return detectBox(); }
-        @JavascriptInterface public String version() { return "2.6"; }
+        @JavascriptInterface public String version() { return "2.9"; }
         /** Teclado garantido na TV/box: caixa de texto nativa. O resultado volta para a página em window.__ptDone(id, texto|null). */
         @JavascriptInterface public void promptText(final String hint, final String initial, final String id) {
             runOnUiThread(() -> showPrompt(hint, initial, id));
@@ -189,7 +227,9 @@ public class MainActivity extends Activity {
         }
         @JavascriptInterface public void play(final String json) {
             runOnUiThread(() -> {
-                stopPreview();
+                boolean handed = false;
+                try { org.json.JSONObject jj = new org.json.JSONObject(json); if (jj.optBoolean("live", false)) handed = handoffPreview(jj.optString("key", "")); } catch (Throwable ignored) {}
+                if (!handed) stopPreview();
                 Intent i = new Intent(MainActivity.this, PlayerActivity.class);
                 i.putExtra("json", json);
                 nativePlaying = true;
@@ -505,6 +545,26 @@ public class MainActivity extends Activity {
         } catch (Throwable ignored) {}
     }
 
+    private Player.Listener pvListener;
+    private String pvCurUrl;
+
+    /** Tela cheia a partir da prévia: entrega o ExoPlayer que já está tocando ao PlayerActivity (sem recarregar). */
+    private boolean handoffPreview(String key) {
+        try {
+            if (pvExo == null || pvView == null || pvCurUrl == null || key.isEmpty() || !key.equals(pvKey)) return false;
+            if (pvExo.getPlaybackState() == Player.STATE_IDLE) return false;
+            pvExo.removeListener(pvListener);
+            pvExo.clearVideoTextureView(pvTex);
+            Handoff.release();
+            Handoff.exo = pvExo;
+            Handoff.url = pvCurUrl;
+            pvExo = null;
+            try { root.removeView(pvView); } catch (Throwable ignored) {}
+            pvView = null; pvArf = null; pvTex = null; pvKey = "";
+            return true;
+        } catch (Throwable t) { return false; }
+    }
+
     private void pvNext() {
         if (pvView == null) return;
         if (pvIdx >= pvUrls.size()) return;
@@ -520,11 +580,13 @@ public class MainActivity extends Activity {
             String lu = u.toLowerCase();
             if (lu.contains(".m3u8")) pmb.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8); else if (lu.matches(".*\\.ts(\\?.*)?$")) pmb.setMimeType(androidx.media3.common.MimeTypes.VIDEO_MP2T);
             pvExo.setMediaItem(pmb.build());
-            pvExo.addListener(new Player.Listener() {
+            pvCurUrl = u;
+            pvListener = new Player.Listener() {
                 @Override public void onPlaybackStateChanged(int st) { if (st == Player.STATE_READY) pvState("ok"); }
                 @Override public void onPlayerError(PlaybackException e) { if (pvIdx >= pvUrls.size()) pvState("fail"); runOnUiThread(MainActivity.this::pvNext); }
                 @Override public void onVideoSizeChanged(androidx.media3.common.VideoSize vs) { if (pvArf != null && vs.width > 0 && vs.height > 0) pvArf.setAspectRatio(vs.width * vs.pixelWidthHeightRatio / vs.height); }
-            });
+            };
+            pvExo.addListener(pvListener);
             pvExo.prepare();
             pvExo.setPlayWhenReady(true);
         } catch (Throwable t) { pvNext(); }

@@ -9,8 +9,8 @@ android {
         applicationId "com.plustv.player"
         minSdk 21
         targetSdk 34
-        versionCode 17
-        versionName "2.6"
+        versionCode 20
+        versionName "2.9"
         ndk { abiFilters(*abiList) }
     }
     signingConfigs {
