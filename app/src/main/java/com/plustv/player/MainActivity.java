@@ -77,20 +77,36 @@ public class MainActivity extends Activity {
             et.setSelection(et.getText().length());
             et.setHint(hint == null ? "" : hint);
             et.setTextSize(22);
-            et.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
+            et.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
+            et.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
             final boolean[] sent = {false};
+            // Sem título nem botões: só a caixa de texto. O teclado abre sozinho, sem precisar clicar de novo; Enter/Buscar confirma.
             final android.app.AlertDialog dlg = new android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle(hint == null || hint.isEmpty() ? "Digite" : hint)
                 .setView(et)
-                .setPositiveButton("OK", (d, w) -> { if (!sent[0]) { sent[0] = true; promptDone(id, et.getText().toString()); } })
-                .setNegativeButton("Cancelar", (d, w) -> { if (!sent[0]) { sent[0] = true; promptDone(id, null); } })
                 .setOnCancelListener(d -> { if (!sent[0]) { sent[0] = true; promptDone(id, null); } })
                 .create();
             et.setOnEditorActionListener((v, a, e) -> { if (!sent[0]) { sent[0] = true; promptDone(id, et.getText().toString()); } dlg.dismiss(); return true; });
-            dlg.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+            et.setOnKeyListener((v, code, ev) -> {
+                if (ev.getAction() == android.view.KeyEvent.ACTION_DOWN && (code == android.view.KeyEvent.KEYCODE_ENTER) && !sent[0]) { sent[0] = true; promptDone(id, et.getText().toString()); dlg.dismiss(); return true; }
+                return false;
+            });
+            dlg.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN);
             dlg.show();
             et.requestFocus();
-            et.postDelayed(() -> { try { android.view.inputmethod.InputMethodManager im = (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE); if (im != null) im.showSoftInput(et, android.view.inputmethod.InputMethodManager.SHOW_FORCED); } catch (Throwable ignored) {} }, 150);
+            final android.view.inputmethod.InputMethodManager im = (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+            final Runnable force = () -> { try { if (dlg.isShowing()) { et.requestFocus(); if (im != null) im.showSoftInput(et, android.view.inputmethod.InputMethodManager.SHOW_FORCED); } } catch (Throwable ignored) {} };
+            et.postDelayed(force, 100);
+            et.postDelayed(force, 400);
+            et.postDelayed(force, 900);
+            // TV box que só abre o teclado com o OK no campo: se ainda não abriu, aperta o OK por nós (uma vez)
+            et.postDelayed(() -> {
+                try {
+                    if (!dlg.isShowing()) return;
+                    boolean vis = false;
+                    if (android.os.Build.VERSION.SDK_INT >= 30) { android.view.WindowInsets wi = et.getRootWindowInsets(); vis = wi != null && wi.isVisible(android.view.WindowInsets.Type.ime()); }
+                    if (!vis) { et.dispatchKeyEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_DPAD_CENTER)); et.dispatchKeyEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_DPAD_CENTER)); force.run(); }
+                } catch (Throwable ignored) {}
+            }, 1300);
         } catch (Throwable t) { promptDone(id, null); }
     }
 
@@ -144,7 +160,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface public boolean ok() { return true; }
         /** true = TV box / Fire Stick (aparelho fraco); false = smart TV, celular e tablet. */
         @JavascriptInterface public boolean isBox() { return detectBox(); }
-        @JavascriptInterface public String version() { return "2.4"; }
+        @JavascriptInterface public String version() { return "2.6"; }
         /** Teclado garantido na TV/box: caixa de texto nativa. O resultado volta para a página em window.__ptDone(id, texto|null). */
         @JavascriptInterface public void promptText(final String hint, final String initial, final String id) {
             runOnUiThread(() -> showPrompt(hint, initial, id));

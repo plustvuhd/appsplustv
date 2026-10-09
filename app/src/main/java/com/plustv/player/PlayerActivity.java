@@ -118,6 +118,10 @@ public class PlayerActivity extends Activity {
 
     private int idx = -1;
     private boolean live;
+    // "Pular abertura" (séries): janela em ms e para onde pular
+    private long introFrom = -1, introTo = -1, introEnd = 0;
+    private boolean introDone = false;
+    private TextView skipBtn;
     private long startMs;
     private boolean finished = false;
     private boolean playedOnce = false;
@@ -194,6 +198,7 @@ public class PlayerActivity extends Activity {
             long p = pos(), d = dur();
             if (p > 0) lastPos = p;
             if (d > 0) lastDur = d;
+            updateSkip(p, d);
             try {
                 if (exo != null && playedOnce) {
                     int st = exo.getPlaybackState();
@@ -231,6 +236,8 @@ public class PlayerActivity extends Activity {
             engine = j.optString("engine", "auto");
             startMs = j.optLong("startMs", 0);
             live = j.optBoolean("live", false);
+            JSONObject io = j.optJSONObject("intro");
+            if (io != null && !live) { introFrom = io.optLong("from", 3) * 1000; introTo = io.optLong("to", 150) * 1000; introEnd = io.optLong("end", 90) * 1000; }
             String f = j.optString("fit", "fill");
             fitMode = "contain".equals(f) ? 0 : "fill".equals(f) ? 2 : 1;
         } catch (Exception e) { finishWith(false, true); return; }
@@ -378,6 +385,24 @@ public class PlayerActivity extends Activity {
         overlay = ov;
         overlay.setVisibility(View.GONE);
 
+        if (introFrom >= 0) {
+            skipBtn = new TextView(this);
+            skipBtn.setText("Pular abertura  (OK)");
+            skipBtn.setTextColor(Color.WHITE);
+            skipBtn.setTextSize(18);
+            skipBtn.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            skipBtn.setGravity(Gravity.CENTER);
+            skipBtn.setPadding(dp(26), dp(14), dp(26), dp(14));
+            android.graphics.drawable.GradientDrawable sg = new android.graphics.drawable.GradientDrawable();
+            sg.setColor(0xE6000000); sg.setStroke(dp(2), 0xFFFFFFFF); sg.setCornerRadius(dp(10));
+            skipBtn.setBackground(sg);
+            skipBtn.setVisibility(View.GONE);
+            skipBtn.setOnClickListener(v -> skipIntro());
+            FrameLayout.LayoutParams sp = new FrameLayout.LayoutParams(-2, -2);
+            sp.gravity = Gravity.BOTTOM | Gravity.END;
+            sp.rightMargin = dp(40); sp.bottomMargin = dp(120);
+            root.addView(skipBtn, sp);
+        }
         h.post(ticker);
         h.post(dotsAnim);
         if (nativeUi) h.postDelayed(beat, 1500);
@@ -641,6 +666,17 @@ public class PlayerActivity extends Activity {
         } catch (Throwable ignored) {}
     }
 
+    private boolean skipVisible() { return skipBtn != null && skipBtn.getVisibility() == View.VISIBLE; }
+    private void updateSkip(long p, long d) {
+        if (skipBtn == null) return;
+        boolean show = !introDone && !live && d > 300000 && p >= introFrom && p <= introTo;
+        if (show != skipVisible()) skipBtn.setVisibility(show ? View.VISIBLE : View.GONE);
+    }
+    private void skipIntro() {
+        introDone = true;
+        if (skipBtn != null) skipBtn.setVisibility(View.GONE);
+        seekToMs(Math.max(introEnd, pos() + 10000));
+    }
     private void seekToMs(long t) {
         try { if (exo != null) exo.seekTo(t); else if (vlc != null) vlc.setTime(t); } catch (Throwable ignored) {}
     }
@@ -739,6 +775,7 @@ public class PlayerActivity extends Activity {
             || k == KeyEvent.KEYCODE_CHANNEL_UP || k == KeyEvent.KEYCODE_CHANNEL_DOWN;
         if (!mine) return super.dispatchKeyEvent(ev);
         if (ev.getAction() != KeyEvent.ACTION_DOWN) return true;
+        if ((k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER) && skipVisible()) { skipIntro(); return true; }
         switch (k) {
             case KeyEvent.KEYCODE_BACK: finishWith(false, false); return true;
             case KeyEvent.KEYCODE_DPAD_CENTER:
