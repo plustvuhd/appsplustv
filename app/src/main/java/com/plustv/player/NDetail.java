@@ -271,13 +271,13 @@ public class NDetail extends Activity {
 
     private void launch(String url, String title, long startMs) {
         NHome h = NHome.cur_;
-        String engine = getSharedPreferences("plustv", MODE_PRIVATE).getString("n_engine", "exo");
+        String engine = getSharedPreferences("plustv", MODE_PRIVATE).getString("n_engine", "auto");
         try {
             JSONObject j = new JSONObject();
             j.put("urls", new JSONArray().put(url));
             j.put("title", title);
             j.put("startMs", startMs);
-            j.put("engine", "vlc".equals(engine) ? "vlc" : "exo");
+            j.put("engine", "vlc".equals(engine) ? "vlc" : "exo".equals(engine) ? "exo" : "auto");
             j.put("live", false);
             j.put("fit", "contain");
             Intent i = new Intent(this, PlayerActivity.class);

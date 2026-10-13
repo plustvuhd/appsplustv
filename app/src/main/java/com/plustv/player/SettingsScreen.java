@@ -35,7 +35,7 @@ public class SettingsScreen extends Screen {
         });
         bEng = row(() -> {
             String e = home.engine();
-            String n = "exo".equals(e) ? "vlc" : "exo";
+            String n = "auto".equals(e) ? "vlc" : "vlc".equals(e) ? "exo" : "auto";
             home.prefs().edit().putString("n_engine", n).apply();
             refresh();
         });
@@ -96,7 +96,7 @@ public class SettingsScreen extends Screen {
     private void refresh() {
         bFmt.setText("Formato do fluxo:  " + ("hls".equals(home.fmt()) ? "HLS (m3u8)" : "TS (recomendado)"));
         String e = home.engine();
-        bEng.setText("Player:  " + ("vlc".equals(e) ? "VLC" : "ExoPlayer (recomendado)"));
+        bEng.setText("Player:  " + ("vlc".equals(e) ? "VLC" : "exo".equals(e) ? "ExoPlayer" : "Automático (VLC na TV/box)"));
         bAdult.setText("Pastas adultas:  " + (home.showAdult() ? "mostrar (travadas com PIN)" : "ocultas"));
     }
 

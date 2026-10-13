@@ -277,6 +277,16 @@ public class PlayerActivity extends Activity {
             fitMode = "contain".equals(f) ? 0 : "fill".equals(f) ? 2 : 1;
         } catch (Exception e) { finishWith(false, true); return; }
 
+        // TV box / Android TV (sem tela de toque): o VLC vai primeiro (mais estável nesses aparelhos); a barra de controles é a mesma.
+        boolean tvBox = false;
+        try {
+            android.app.UiModeManager um = (android.app.UiModeManager) getSystemService(UI_MODE_SERVICE);
+            tvBox = (um != null && um.getCurrentModeType() == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION)
+                || !getPackageManager().hasSystemFeature(android.content.pm.PackageManager.FEATURE_TOUCHSCREEN)
+                || getPackageManager().hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK);
+        } catch (Throwable ignored) {}
+        if ("swap".equals(engine)) engine = tvBox ? "exo" : "vlc";
+        else if ("auto".equals(engine) && tvBox) engine = "vlc";
         String[] order;
         if ("vlc".equals(engine)) order = new String[]{"vlc", "exo"};
         else if ("exo".equals(engine)) order = new String[]{"exo", "vlc"};
@@ -288,6 +298,7 @@ public class PlayerActivity extends Activity {
         engineOrder = order;
         for (String en : order) for (String u : urls) combos.add(new String[]{en, u});
         curTitle = title;
+        cur = this;
         nativeUi = getIntent().getBooleanExtra("native_ui", false);
         if (nativeUi) {
             nsess = Net.Sess.load(this);
@@ -867,6 +878,19 @@ public class PlayerActivity extends Activity {
         }
     }
 
+    /** Instância aberta (para a página fechar o player quando outro aparelho assume a tela). */
+    static PlayerActivity cur;
+    /** Chamado pelo site (PlusTVNative.stopPlay): outro aparelho assumiu a tela, fecha o player e volta para a página. */
+    static void closeFromWeb(final String msg) {
+        final PlayerActivity a = cur;
+        if (a == null) return;
+        a.runOnUiThread(() -> {
+            if (a.finished) return;
+            try { if (msg != null && msg.length() > 0) android.widget.Toast.makeText(a, msg, android.widget.Toast.LENGTH_LONG).show(); } catch (Throwable ignored) {}
+            a.finishWith(false, false);
+        });
+    }
+
     private void finishWith(boolean ended, boolean err) {
         if (finished) return;
         long p = pos(), d = dur();
@@ -892,6 +916,7 @@ public class PlayerActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        if (cur == this) cur = null;
         Handoff.release();
         finished = true;
         h.removeCallbacksAndMessages(null);

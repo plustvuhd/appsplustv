@@ -198,7 +198,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface public boolean ok() { return true; }
         /** true = TV box / Fire Stick (aparelho fraco); false = smart TV, celular e tablet. */
         @JavascriptInterface public boolean isBox() { return detectBox(); }
-        @JavascriptInterface public String version() { return "2.9"; }
+        @JavascriptInterface public String version() { return "3.1"; }
         /** Teclado garantido na TV/box: caixa de texto nativa. O resultado volta para a página em window.__ptDone(id, texto|null). */
         @JavascriptInterface public void promptText(final String hint, final String initial, final String id) {
             runOnUiThread(() -> showPrompt(hint, initial, id));
@@ -224,6 +224,10 @@ public class MainActivity extends Activity {
         }
         @JavascriptInterface public void previewStop() {
             runOnUiThread(() -> stopPreview());
+        }
+        /** Outro aparelho assumiu a tela: fecha o player nativo aberto (o site avisa por aqui). */
+        @JavascriptInterface public void stopPlay(final String msg) {
+            PlayerActivity.closeFromWeb(msg);
         }
         @JavascriptInterface public void play(final String json) {
             runOnUiThread(() -> {
