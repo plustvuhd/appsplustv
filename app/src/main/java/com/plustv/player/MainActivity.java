@@ -198,7 +198,13 @@ public class MainActivity extends Activity {
         @JavascriptInterface public boolean ok() { return true; }
         /** true = TV box / Fire Stick (aparelho fraco); false = smart TV, celular e tablet. */
         @JavascriptInterface public boolean isBox() { return detectBox(); }
-        @JavascriptInterface public String version() { return "3.1"; }
+        @JavascriptInterface public String version() { return "3.3"; }
+        /** ID fixo do aparelho (ANDROID_ID): continua o mesmo ao desinstalar/instalar o app; o painel usa para não liberar o teste de 7 dias de novo. */
+        /** true na versão da Google Play: o player some com pagamento, preço, QR e link de ativação. */
+        @JavascriptInterface public boolean isStore() { return BuildConfig.STORE; }
+        @JavascriptInterface public String hwId() {
+            try { String id = android.provider.Settings.Secure.getString(getContentResolver(), android.provider.Settings.Secure.ANDROID_ID); return id == null ? "" : "an:" + id; } catch (Throwable t) { return ""; }
+        }
         /** Teclado garantido na TV/box: caixa de texto nativa. O resultado volta para a página em window.__ptDone(id, texto|null). */
         @JavascriptInterface public void promptText(final String hint, final String initial, final String id) {
             runOnUiThread(() -> showPrompt(hint, initial, id));

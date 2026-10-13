@@ -4,14 +4,21 @@ plugins { id 'com.android.application' }
 def abiList = (project.findProperty('abis') ?: 'armeabi-v7a,arm64-v8a').toString().split(',')
 android {
     namespace 'com.plustv.player'
-    compileSdk 34
+    compileSdk 36
     defaultConfig {
         applicationId "com.plustv.player"
         minSdk 21
-        targetSdk 34
-        versionCode 22
-        versionName "3.1"
+        targetSdk 36
+        versionCode 24
+        versionName "3.3"
         ndk { abiFilters(*abiList) }
+    }
+    buildFeatures { buildConfig true }
+    // site = APK para instalar fora da loja (traz VLC, licença por Pix no site). loja = Google Play (só ExoPlayer, sem nenhuma menção a pagamento externo).
+    flavorDimensions += 'dist'
+    productFlavors {
+        site { dimension 'dist'; buildConfigField 'boolean', 'STORE', 'false' }
+        loja { dimension 'dist'; buildConfigField 'boolean', 'STORE', 'true' }
     }
     signingConfigs {
         release {
@@ -20,9 +27,21 @@ android {
             storeFile file("plustv.keystore"); storePassword "plustv123"; keyAlias "plustv"; keyPassword "plustv123"
         }
     }
-    buildTypes { release { signingConfig signingConfigs.release; minifyEnabled false } }
+    buildTypes {
+        release {
+            minifyEnabled false
+            // Só a versão "site" usa a chave inclusa. A versão "loja" é assinada com a SUA chave de upload (veja LEIA-ME-LOJA.md): nada de chave/senha dentro do projeto.
+            productFlavors.site.signingConfig = signingConfigs.release
+            def lk = System.getenv('LOJA_KEYSTORE')
+            if (lk) {
+                signingConfigs { loja { storeFile file(lk); storePassword System.getenv('LOJA_STORE_PASS'); keyAlias System.getenv('LOJA_KEY_ALIAS'); keyPassword System.getenv('LOJA_KEY_PASS') } }
+                productFlavors.loja.signingConfig = signingConfigs.loja
+            }
+        }
+    }
     lint { abortOnError false; checkReleaseBuilds false }
-    packagingOptions { jniLibs { pickFirsts += ['**/libc++_shared.so'] } }
+    // Bibliotecas nativas sem compactar e alinhadas (exigência de 16 KB do Google Play)
+    packagingOptions { jniLibs { pickFirsts += ['**/libc++_shared.so']; useLegacyPackaging false } }
     compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
 }
 
@@ -32,5 +51,6 @@ dependencies {
     implementation 'androidx.media3:media3-exoplayer-hls:1.4.1'
     implementation 'androidx.media3:media3-ui:1.4.1'
     implementation 'androidx.media3:media3-datasource:1.4.1'
-    implementation 'org.videolan.android:libvlc-all:3.6.0'
+    // VLC só na versão fora da loja (a libVLC 3.6 ainda não é compatível com páginas de 16 KB exigidas pelo Google Play)
+    siteImplementation 'org.videolan.android:libvlc-all:3.6.0'
 }

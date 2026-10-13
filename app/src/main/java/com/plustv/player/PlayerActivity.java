@@ -295,6 +295,7 @@ public class PlayerActivity extends Activity {
             boolean vlcFirst = !urls.isEmpty() && urls.get(0).toLowerCase().matches(".*\\.(avi|wmv|flv|rmvb|mpg|mpeg|divx|vob)(\\?.*)?$");
             order = vlcFirst ? new String[]{"vlc", "exo"} : new String[]{"exo", "vlc"};
         }
+        if (BuildConfig.STORE) order = new String[]{"exo"}; // versão da loja: só ExoPlayer
         engineOrder = order;
         for (String en : order) for (String u : urls) combos.add(new String[]{en, u});
         curTitle = title;
