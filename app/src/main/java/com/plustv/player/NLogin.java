@@ -28,6 +28,7 @@ public class NLogin extends Activity {
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
+        I18n.init(this);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN | WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN);
         SharedPreferences sp = getSharedPreferences("plustv", MODE_PRIVATE);
@@ -82,6 +83,14 @@ public class NLogin extends Activity {
         LinearLayout.LayoutParams wl = new LinearLayout.LayoutParams(-1, -2);
         wl.topMargin = UI.dp(this, 8);
         card.addView(web, wl);
+        TextView lg = UI.button(this, "Idioma:  " + I18n.label(I18n.lang()), () -> {
+            String[] names = new String[I18n.LABELS.length];
+            for (int i = 0; i < names.length; i++) names[i] = I18n.t(I18n.LABELS[i]);
+            new android.app.AlertDialog.Builder(this).setTitle(I18n.t("Idioma")).setItems(names, (d, w) -> { I18n.set(I18n.CODES[w]); recreate(); }).show();
+        });
+        LinearLayout.LayoutParams ll = new LinearLayout.LayoutParams(-1, -2);
+        ll.topMargin = UI.dp(this, 8);
+        card.addView(lg, ll);
         fUser.requestFocus();
     }
 

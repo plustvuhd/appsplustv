@@ -265,6 +265,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        I18n.init(this);
         // Padrão: versão web do painel (visual clássico ou Netflix, escolhido nas configurações). O player de vídeo continua sendo o ExoPlayer nativo.
         {
             SharedPreferences sp0 = getSharedPreferences("plustv", MODE_PRIVATE);
@@ -364,7 +365,7 @@ public class MainActivity extends Activity {
         splashImg.setAdjustViewBounds(true);
         splashImg.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
         splash.addView(splashImg, new LinearLayout.LayoutParams(360, 360));
-        TextView st = new TextView(this);
+        TextView st = new Tr.TV(this);
         st.setText("Carregando...");
         st.setTextColor(Color.parseColor("#cfc8f0"));
         st.setTextSize(24);
@@ -382,15 +383,15 @@ public class MainActivity extends Activity {
         err.setOrientation(LinearLayout.VERTICAL);
         err.setGravity(Gravity.CENTER);
         err.setVisibility(View.GONE);
-        TextView t = new TextView(this);
+        TextView t = new Tr.TV(this);
         t.setText("Sem conexão\nNão consegui abrir o " + getString(R.string.app_name) + ". Verifique a internet.");
         t.setTextColor(Color.WHITE); t.setTextSize(26); t.setGravity(Gravity.CENTER);
         err.addView(t);
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER);
         row.setPadding(0, 40, 0, 0);
-        Button retry = new Button(this); retry.setText("Tentar de novo");
-        Button exit = new Button(this); exit.setText("Sair");
+        Button retry = new Tr.BTN(this); retry.setText("Tentar de novo");
+        Button exit = new Tr.BTN(this); exit.setText("Sair");
         retry.setOnClickListener(v -> start());
         exit.setOnClickListener(v -> finish());
         row.addView(retry); row.addView(exit);

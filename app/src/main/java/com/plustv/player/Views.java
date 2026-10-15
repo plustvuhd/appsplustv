@@ -64,7 +64,7 @@ final class Views {
             TextView t;
             if (v instanceof TextView) t = (TextView) v;
             else {
-                t = new TextView(c);
+                t = new Tr.TV(c);
                 t.setPadding(UI.dp(c, 16), UI.dp(c, 11), UI.dp(c, 10), UI.dp(c, 11));
                 t.setSingleLine(true);
                 t.setEllipsize(TextUtils.TruncateAt.END);
@@ -100,7 +100,7 @@ final class Views {
                 iv = new ImageView(c);
                 iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
                 row.addView(iv, new LinearLayout.LayoutParams(UI.dp(c, 56), UI.dp(c, 40)));
-                name = new TextView(c);
+                name = new Tr.TV(c);
                 name.setTextColor(UI.TXT);
                 name.setTextSize(16);
                 name.setSingleLine(true);
@@ -108,7 +108,7 @@ final class Views {
                 LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(0, -2, 1f);
                 nl.leftMargin = UI.dp(c, 10);
                 row.addView(name, nl);
-                star = new TextView(c);
+                star = new Tr.TV(c);
                 star.setText("★");
                 star.setTextColor(0xFFF5B301);
                 star.setTextSize(18);
@@ -149,7 +149,7 @@ final class Views {
                 iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
                 iv.setBackground(UI.round(UI.CARD, UI.dp(c, 8)));
                 cell.addView(iv, new LinearLayout.LayoutParams(-1, UI.dp(c, 200)));
-                TextView t = new TextView(c);
+                TextView t = new Tr.TV(c);
                 t.setTextColor(UI.TXT);
                 t.setTextSize(13);
                 t.setMaxLines(2);

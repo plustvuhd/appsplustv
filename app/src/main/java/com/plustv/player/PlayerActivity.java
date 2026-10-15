@@ -259,6 +259,7 @@ public class PlayerActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        I18n.init(this);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         String title = "";
         String engine = "auto";
@@ -319,7 +320,7 @@ public class PlayerActivity extends Activity {
         root.addView(vlcView, new FrameLayout.LayoutParams(-1, -1));
         vlcView.setVisibility(View.GONE);
 
-        status = new TextView(this);
+        status = new Tr.TV(this);
         status.setTextColor(Color.WHITE);
         status.setTextSize(24);
         status.setGravity(Gravity.CENTER);
@@ -338,7 +339,7 @@ public class PlayerActivity extends Activity {
         LinearLayout top = new LinearLayout(this);
         top.setOrientation(LinearLayout.HORIZONTAL);
         top.setGravity(Gravity.CENTER_VERTICAL);
-        titleTv = new TextView(this);
+        titleTv = new Tr.TV(this);
         titleTv.setTextColor(Color.WHITE);
         titleTv.setTextSize(26);
         titleTv.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
@@ -347,7 +348,7 @@ public class PlayerActivity extends Activity {
         titleTv.setShadowLayer(6, 0, 2, 0xAA000000);
         titleTv.setText(title);
         top.addView(titleTv, new LinearLayout.LayoutParams(0, -2, 1f));
-        timeTv = new TextView(this);
+        timeTv = new Tr.TV(this);
         timeTv.setTextColor(Color.WHITE);
         timeTv.setTextSize(19);
         timeTv.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
@@ -394,7 +395,7 @@ public class PlayerActivity extends Activity {
             final int idx = i;
             View t;
             if (i == 3) {
-                TextView pill = new TextView(this);
+                TextView pill = new Tr.TV(this);
                 pill.setText(fitLabel());
                 pill.setTextColor(Color.WHITE);
                 pill.setTextSize(17);
@@ -437,7 +438,7 @@ public class PlayerActivity extends Activity {
         overlay.setVisibility(View.GONE);
 
         if (introFrom >= 0) {
-            skipBtn = new TextView(this);
+            skipBtn = new Tr.TV(this);
             skipBtn.setText("Pular abertura  (OK)");
             skipBtn.setTextColor(Color.WHITE);
             skipBtn.setTextSize(18);
@@ -494,9 +495,9 @@ public class PlayerActivity extends Activity {
                     final String who = oa != null && oa.length() > 0 ? oa.optJSONObject(0).optString("label", "outro aparelho") : "outro aparelho";
                     h.post(() -> screenConflict(lim, who));
                 } else if (r.optBoolean("kicked", false)) {
-                    h.post(() -> { android.widget.Toast.makeText(this, "Outro aparelho assumiu a sua tela.", android.widget.Toast.LENGTH_LONG).show(); finishWith(false, false); });
+                    h.post(() -> { I18n.mk(this, "Outro aparelho assumiu a sua tela.", android.widget.Toast.LENGTH_LONG).show(); finishWith(false, false); });
                 } else if (r.optInt("_code", 200) == 403) {
-                    h.post(() -> { android.widget.Toast.makeText(this, r.optString("error", "Aparelho bloqueado."), android.widget.Toast.LENGTH_LONG).show(); finishWith(false, false); });
+                    h.post(() -> { I18n.mk(this, r.optString("error", "Aparelho bloqueado."), android.widget.Toast.LENGTH_LONG).show(); finishWith(false, false); });
                 }
             } catch (Exception ignored) {}
         });
@@ -516,11 +517,11 @@ public class PlayerActivity extends Activity {
         conflictOpen = true;
         try { if (exo != null) exo.setPlayWhenReady(false); else if (vlc != null) vlc.pause(); } catch (Throwable ignored) {}
         new android.app.AlertDialog.Builder(this)
-            .setTitle("Limite de telas atingido")
-            .setMessage("Seu plano permite " + limit + " tela(s) ao mesmo tempo e " + who + " já está assistindo. Quer desconectar o outro e assistir aqui?")
+            .setTitle(I18n.t("Limite de telas atingido"))
+            .setMessage(I18n.t("Seu plano permite " + limit + " tela(s) ao mesmo tempo e " + who + " já está assistindo. Quer desconectar o outro e assistir aqui?"))
             .setCancelable(false)
-            .setPositiveButton("Assistir aqui", (d, w) -> { conflictOpen = false; sendWatch(false, true); try { if (exo != null) exo.setPlayWhenReady(true); else if (vlc != null) vlc.play(); } catch (Throwable ignored) {} })
-            .setNegativeButton("Voltar", (d, w) -> { conflictOpen = false; finishWith(false, false); })
+            .setPositiveButton(I18n.t("Assistir aqui"), (d, w) -> { conflictOpen = false; sendWatch(false, true); try { if (exo != null) exo.setPlayWhenReady(true); else if (vlc != null) vlc.play(); } catch (Throwable ignored) {} })
+            .setNegativeButton(I18n.t("Voltar"), (d, w) -> { conflictOpen = false; finishWith(false, false); })
             .show();
     }
 
@@ -887,7 +888,7 @@ public class PlayerActivity extends Activity {
         if (a == null) return;
         a.runOnUiThread(() -> {
             if (a.finished) return;
-            try { if (msg != null && msg.length() > 0) android.widget.Toast.makeText(a, msg, android.widget.Toast.LENGTH_LONG).show(); } catch (Throwable ignored) {}
+            try { if (msg != null && msg.length() > 0) I18n.mk(a, msg, android.widget.Toast.LENGTH_LONG).show(); } catch (Throwable ignored) {}
             a.finishWith(false, false);
         });
     }

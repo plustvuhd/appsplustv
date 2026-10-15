@@ -225,14 +225,14 @@ public class VodScreen extends Screen {
     }
 
     private void askSearch() {
-        final EditText et = new EditText(home);
+        final EditText et = new Tr.ET(home);
         et.setSingleLine(true);
         et.setInputType(InputType.TYPE_CLASS_TEXT);
         et.setHint("Nome");
         AlertDialog dlg = new AlertDialog.Builder(home, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-            .setTitle("movie".equals(kind) ? "Buscar filme em todas as pastas" : "Buscar série em todas as pastas").setView(et)
-            .setPositiveButton("Buscar", (d, w) -> doSearch(et.getText().toString()))
-            .setNegativeButton("Cancelar", null).create();
+            .setTitle(I18n.t("movie".equals(kind) ? "Buscar filme em todas as pastas" : "Buscar série em todas as pastas")).setView(et)
+            .setPositiveButton(I18n.t("Buscar"), (d, w) -> doSearch(et.getText().toString()))
+            .setNegativeButton(I18n.t("Cancelar"), null).create();
         et.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
         et.setOnEditorActionListener((v, a, e) -> { dlg.dismiss(); doSearch(et.getText().toString()); return true; });
         dlg.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);

@@ -258,14 +258,14 @@ public class LiveScreen extends Screen {
 
     // ---------- busca ----------
     private void askSearch() {
-        final EditText et = new EditText(home);
+        final EditText et = new Tr.ET(home);
         et.setSingleLine(true);
         et.setInputType(InputType.TYPE_CLASS_TEXT);
         et.setHint("Nome do canal");
         AlertDialog dlg = new AlertDialog.Builder(home, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-            .setTitle("Buscar canal").setView(et)
-            .setPositiveButton("Buscar", (d, w) -> search(et.getText().toString()))
-            .setNegativeButton("Cancelar", null).create();
+            .setTitle(I18n.t("Buscar canal")).setView(et)
+            .setPositiveButton(I18n.t("Buscar"), (d, w) -> search(et.getText().toString()))
+            .setNegativeButton(I18n.t("Cancelar"), null).create();
         et.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
         et.setOnEditorActionListener((v, a, e) -> { dlg.dismiss(); search(et.getText().toString()); return true; });
         dlg.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);

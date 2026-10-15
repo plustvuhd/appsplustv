@@ -41,6 +41,7 @@ public class NHome extends Activity {
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
+        I18n.init(this);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN | WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN);
         cur_ = this;
@@ -124,15 +125,15 @@ public class NHome extends Activity {
 
     /** Pede o PIN (4+ dígitos) e chama ok se acertar. */
     public void askPin(String title, final Runnable ok) {
-        final android.widget.EditText et = new android.widget.EditText(this);
+        final android.widget.EditText et = new Tr.ET(this);
         et.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
         et.setHint("PIN");
-        new android.app.AlertDialog.Builder(this).setTitle(title).setView(et)
-            .setPositiveButton("OK", (d, w) -> {
+        new android.app.AlertDialog.Builder(this).setTitle(I18n.t(title)).setView(et)
+            .setPositiveButton(I18n.t("OK"), (d, w) -> {
                 if (et.getText().toString().trim().equals(pin())) ok.run();
-                else Toast.makeText(this, "PIN incorreto", Toast.LENGTH_SHORT).show();
+                else I18n.mk(this, "PIN incorreto", Toast.LENGTH_SHORT).show();
             })
-            .setNegativeButton("Cancelar", null).show();
+            .setNegativeButton(I18n.t("Cancelar"), null).show();
     }
 
     /** Abre a pasta se não estiver travada; senão pede o PIN. */
@@ -144,8 +145,8 @@ public class NHome extends Activity {
     /** Segurar OK numa pasta: ocultar ou travar/destravar com PIN. */
     public void folderMenu(final String kind, final String name, final Runnable reload) {
         final boolean lk = set("n_lock").contains(kind + "|" + name);
-        final String[] opts = { "Ocultar esta pasta", lk ? "Tirar a trava de PIN" : "Travar com PIN" };
-        new android.app.AlertDialog.Builder(this).setTitle(name).setItems(opts, (d, w) -> {
+        final String[] opts = { I18n.t("Ocultar esta pasta"), I18n.t(lk ? "Tirar a trava de PIN" : "Travar com PIN") };
+        new android.app.AlertDialog.Builder(this).setTitle(I18n.t(name)).setItems(opts, (d, w) -> {
             if (w == 0) askPin("PIN para ocultar", () -> { Set<String> h = set("n_hide"); h.add(kind + "|" + name); prefs().edit().putStringSet("n_hide", h).apply(); reload.run(); });
             else askPin("PIN", () -> { Set<String> l = set("n_lock"); if (lk) l.remove(kind + "|" + name); else l.add(kind + "|" + name); prefs().edit().putStringSet("n_lock", l).apply(); unlocked.remove(kind + "|" + name); reload.run(); });
         }).show();
@@ -215,7 +216,7 @@ public class NHome extends Activity {
             list.add(0, new Item(it.kind, it.id, it.name, it.icon, it.ext));
             now = true;
         }
-        Toast.makeText(this, now ? "Adicionado aos favoritos" : "Removido dos favoritos", Toast.LENGTH_SHORT).show();
+        I18n.mk(this, now ? "Adicionado aos favoritos" : "Removido dos favoritos", Toast.LENGTH_SHORT).show();
         Net.POOL.execute(() -> {
             try {
                 JSONObject b = sess.authBody();
@@ -271,7 +272,7 @@ public class NHome extends Activity {
                 long n = System.currentTimeMillis();
                 if (n - backAt < 2000) { finishAffinity(); return true; }
                 backAt = n;
-                Toast.makeText(this, "Aperte voltar de novo para sair", Toast.LENGTH_SHORT).show();
+                I18n.mk(this, "Aperte voltar de novo para sair", Toast.LENGTH_SHORT).show();
                 return true;
             }
         }

@@ -41,6 +41,7 @@ public class NDetail extends Activity {
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
+        I18n.init(this);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         sess = Net.Sess.load(this);
         Intent in = getIntent();
@@ -249,7 +250,7 @@ public class NDetail extends Activity {
     private void playMain() {
         if ("movie".equals(kind)) { long[] p = prog("movie", id); playMovie(p[0] > 30000 && (p[1] <= 0 || p[0] < p[1] - 45000) ? p[0] : 0); }
         else {
-            if (eps.isEmpty()) { Toast.makeText(this, "Aguarde carregar os episódios", Toast.LENGTH_SHORT).show(); return; }
+            if (eps.isEmpty()) { I18n.mk(this, "Aguarde carregar os episódios", Toast.LENGTH_SHORT).show(); return; }
             Ep e = lastEp();
             playEp(e != null ? e : eps.get(0), true);
         }
@@ -295,7 +296,7 @@ public class NDetail extends Activity {
         boolean ended = data != null && data.getBooleanExtra("ended", false);
         boolean err = data == null || data.getBooleanExtra("err", false);
         String key = "series".equals(kind) ? (playing != null ? playing.id : "") : id;
-        if (err) { Toast.makeText(this, "Não foi possível reproduzir agora. Tente de novo.", Toast.LENGTH_LONG).show(); return; }
+        if (err) { I18n.mk(this, "Não foi possível reproduzir agora. Tente de novo.", Toast.LENGTH_LONG).show(); return; }
         if (!key.isEmpty()) saveProg(kind, key, ended ? 0 : pos, dur, ended);
         if ("series".equals(kind)) {
             if (ended && playing != null) {
@@ -351,7 +352,7 @@ public class NDetail extends Activity {
         @Override public Object getItem(int i) { return names.get(i); }
         @Override public long getItemId(int i) { return i; }
         @Override public View getView(int i, View v, ViewGroup p) {
-            TextView t = v instanceof TextView ? (TextView) v : new TextView(c);
+            TextView t = v instanceof TextView ? (TextView) v : new Tr.TV(c);
             t.setPadding(UI.dp(c, 14), UI.dp(c, 10), UI.dp(c, 10), UI.dp(c, 10));
             t.setSingleLine(true);
             t.setEllipsize(android.text.TextUtils.TruncateAt.END);

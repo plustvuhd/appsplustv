@@ -12,7 +12,7 @@ import android.widget.Toast;
 public class SettingsScreen extends Screen {
     private ScrollView scroll;
     private LinearLayout col;
-    private TextView bFmt, bEng, bAdult;
+    private TextView bFmt, bEng, bAdult, bLang;
 
     public SettingsScreen(NHome h) {
         super(h);
@@ -42,23 +42,35 @@ public class SettingsScreen extends Screen {
         bAdult = row(() -> {
             home.prefs().edit().putBoolean("n_adult", !home.showAdult()).apply();
             refresh();
-            Toast.makeText(home, "Reabra Canais/Filmes/Séries para atualizar as pastas", Toast.LENGTH_SHORT).show();
+            I18n.mk(home, "Reabra Canais/Filmes/Séries para atualizar as pastas", Toast.LENGTH_SHORT).show();
         });
         row2("Alterar PIN das pastas (padrão 0000)", () -> home.askPin("PIN atual", () -> {
-            final android.widget.EditText et = new android.widget.EditText(home);
+            final android.widget.EditText et = new Tr.ET(home);
             et.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
             et.setHint("Novo PIN (4 a 8 dígitos)");
-            new android.app.AlertDialog.Builder(home).setTitle("Novo PIN").setView(et).setPositiveButton("Salvar", (d, w) -> {
+            new android.app.AlertDialog.Builder(home).setTitle(I18n.t("Novo PIN")).setView(et).setPositiveButton(I18n.t("Salvar"), (d, w) -> {
                 String np = et.getText().toString().trim();
-                if (np.length() < 4 || np.length() > 8) { Toast.makeText(home, "Use de 4 a 8 dígitos", Toast.LENGTH_SHORT).show(); return; }
+                if (np.length() < 4 || np.length() > 8) { I18n.mk(home, "Use de 4 a 8 dígitos", Toast.LENGTH_SHORT).show(); return; }
                 home.prefs().edit().putString("n_pin_code", np).apply();
-                Toast.makeText(home, "PIN alterado", Toast.LENGTH_SHORT).show();
-            }).setNegativeButton("Cancelar", null).show();
+                I18n.mk(home, "PIN alterado", Toast.LENGTH_SHORT).show();
+            }).setNegativeButton(I18n.t("Cancelar"), null).show();
         }));
         row2("Mostrar de novo as pastas ocultas e tirar travas", () -> home.askPin("PIN", () -> {
             home.clearHiddenLocked();
-            Toast.makeText(home, "Pronto. Reabra Canais/Filmes/Séries.", Toast.LENGTH_SHORT).show();
+            I18n.mk(home, "Pronto. Reabra Canais/Filmes/Séries.", Toast.LENGTH_SHORT).show();
         }));
+        bLang = row(() -> {
+            final int[] pick = { 0 };
+            String cur = I18n.manual() ? I18n.lang() : "auto";
+            for (int i = 0; i < I18n.CODES.length; i++) if (I18n.CODES[i].equals(cur)) pick[0] = i;
+            String[] names = new String[I18n.LABELS.length];
+            for (int i = 0; i < names.length; i++) names[i] = I18n.t(I18n.LABELS[i]);
+            new android.app.AlertDialog.Builder(home).setTitle(I18n.t("Idioma")).setSingleChoiceItems(names, pick[0], (d, w) -> {
+                I18n.set(I18n.CODES[w]);
+                d.dismiss();
+                home.recreate();
+            }).setNegativeButton(I18n.t("Cancelar"), null).show();
+        });
         row2("Usar a versão web", () -> {
             home.prefs().edit().putString("ui_mode", "web").apply();
             Intent i = new Intent(home, MainActivity.class);
@@ -97,6 +109,7 @@ public class SettingsScreen extends Screen {
         bFmt.setText("Formato do fluxo:  " + ("hls".equals(home.fmt()) ? "HLS (m3u8)" : "TS (recomendado)"));
         String e = home.engine();
         bEng.setText("Player:  " + ("vlc".equals(e) ? "VLC" : "exo".equals(e) ? "ExoPlayer" : "Automático (VLC na TV/box)"));
+        bLang.setText("Idioma:  " + I18n.t(I18n.manual() ? I18n.label(I18n.lang()) : "Automático (pelo país)"));
         bAdult.setText("Pastas adultas:  " + (home.showAdult() ? "mostrar (travadas com PIN)" : "ocultas"));
     }
 

@@ -45,7 +45,7 @@ public final class UI {
     public static ColorDrawable selector() { return new ColorDrawable(0x00000000); }
 
     public static TextView text(Context c, String t, int sp, int color, boolean bold) {
-        TextView v = new TextView(c);
+        TextView v = new Tr.TV(c);
         v.setText(t);
         v.setTextSize(sp);
         v.setTextColor(color);
@@ -65,7 +65,7 @@ public final class UI {
     }
 
     public static EditText field(Context c, String hint, boolean password) {
-        EditText e = new EditText(c);
+        EditText e = new Tr.ET(c);
         e.setHint(hint);
         e.setHintTextColor(0xFF7F7AA3);
         e.setTextColor(TXT);
