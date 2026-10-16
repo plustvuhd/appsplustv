@@ -47,7 +47,7 @@ public class SettingsScreen extends Screen {
         row2("Alterar PIN das pastas (padrão 0000)", () -> home.askPin("PIN atual", () -> {
             final android.widget.EditText et = new Tr.ET(home);
             et.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
-            et.setHint("Novo PIN (4 a 8 dígitos)");
+            et.setHint(I18n.t("Novo PIN (4 a 8 dígitos)"));
             new android.app.AlertDialog.Builder(home).setTitle(I18n.t("Novo PIN")).setView(et).setPositiveButton(I18n.t("Salvar"), (d, w) -> {
                 String np = et.getText().toString().trim();
                 if (np.length() < 4 || np.length() > 8) { I18n.mk(home, "Use de 4 a 8 dígitos", Toast.LENGTH_SHORT).show(); return; }

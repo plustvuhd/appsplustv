@@ -127,7 +127,7 @@ public class NHome extends Activity {
     public void askPin(String title, final Runnable ok) {
         final android.widget.EditText et = new Tr.ET(this);
         et.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
-        et.setHint("PIN");
+        et.setHint(I18n.t("PIN"));
         new android.app.AlertDialog.Builder(this).setTitle(I18n.t(title)).setView(et)
             .setPositiveButton(I18n.t("OK"), (d, w) -> {
                 if (et.getText().toString().trim().equals(pin())) ok.run();

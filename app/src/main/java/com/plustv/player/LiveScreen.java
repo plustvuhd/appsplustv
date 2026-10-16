@@ -261,7 +261,7 @@ public class LiveScreen extends Screen {
         final EditText et = new Tr.ET(home);
         et.setSingleLine(true);
         et.setInputType(InputType.TYPE_CLASS_TEXT);
-        et.setHint("Nome do canal");
+        et.setHint(I18n.t("Nome do canal"));
         AlertDialog dlg = new AlertDialog.Builder(home, android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setTitle(I18n.t("Buscar canal")).setView(et)
             .setPositiveButton(I18n.t("Buscar"), (d, w) -> search(et.getText().toString()))

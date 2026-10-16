@@ -228,7 +228,7 @@ public class VodScreen extends Screen {
         final EditText et = new Tr.ET(home);
         et.setSingleLine(true);
         et.setInputType(InputType.TYPE_CLASS_TEXT);
-        et.setHint("Nome");
+        et.setHint(I18n.t("Nome"));
         AlertDialog dlg = new AlertDialog.Builder(home, android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setTitle(I18n.t("movie".equals(kind) ? "Buscar filme em todas as pastas" : "Buscar série em todas as pastas")).setView(et)
             .setPositiveButton(I18n.t("Buscar"), (d, w) -> doSearch(et.getText().toString()))

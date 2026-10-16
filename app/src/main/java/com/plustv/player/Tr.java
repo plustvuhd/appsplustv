@@ -12,7 +12,6 @@ public final class Tr {
     public static class TV extends TextView {
         public TV(Context c) { super(c); }
         @Override public void setText(CharSequence text, BufferType type) { super.setText(I18n.t(text), type); }
-        @Override public void setHint(CharSequence hint) { super.setHint(I18n.t(hint)); }
     }
 
     public static class BTN extends Button {
@@ -22,6 +21,5 @@ public final class Tr {
 
     public static class ET extends EditText {
         public ET(Context c) { super(c); }
-        @Override public void setHint(CharSequence hint) { super.setHint(I18n.t(hint)); }
     }
 }

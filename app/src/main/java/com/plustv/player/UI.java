@@ -66,7 +66,7 @@ public final class UI {
 
     public static EditText field(Context c, String hint, boolean password) {
         EditText e = new Tr.ET(c);
-        e.setHint(hint);
+        e.setHint(I18n.t(hint));
         e.setHintTextColor(0xFF7F7AA3);
         e.setTextColor(TXT);
         e.setTextSize(18);
