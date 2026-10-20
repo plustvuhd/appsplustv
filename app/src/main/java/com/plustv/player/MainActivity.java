@@ -44,6 +44,10 @@ public class MainActivity extends Activity {
     // ===== CONFIGURAÇÃO (edite aqui antes de gerar o APK) =====
     // Endereço padrão do painel (usado se a descoberta e o último endereço salvo falharem).
     static final String PANEL = "https://konnex.business";
+    // Até 5 domínios de reserva (https). O app tenta na ordem; PANEL acima é o primeiro.
+    static final String[] PANELS = { "https://eletronicosplus.shop", "https://plustvxc.shop", "https://plustvplayxc.online", "", "" };
+    // IP direto da VPS (último recurso, só se o GitHub e todos os domínios falharem). Ex.: "http://123.45.67.89:3000". Vazio = desligado.
+    static final String PANEL_IP = "http://72.61.128.111";
     // Arquivo JSON {"panel":"https://..."} num lugar fixo (GitHub raw). Mudou o domínio? Edite só esse arquivo. "" desativa.
     static final String DISCOVERY = "https://raw.githubusercontent.com/plustvuhd/plustv-config/main/plustv.json";
     // (Opcional) link do player de um servidor, ex.: "meu-nome". Vazio = player padrão do painel.
@@ -418,6 +422,41 @@ public class MainActivity extends Activity {
         return u.startsWith("https://") ? u : "";
     }
 
+    /** Aceita http:// ou https:// (usado só para o IP direto da VPS). */
+    static String cleanIp(String u) {
+        if (u == null) return "";
+        u = u.trim();
+        while (u.endsWith("/")) u = u.substring(0, u.length() - 1);
+        return (u.startsWith("https://") || u.startsWith("http://")) ? u : "";
+    }
+
+    /** Lista de endereços do painel, na ordem de tentativa: GitHub (até 5 domínios) → último que funcionou → domínios do app (até 5) → IP do GitHub → IP do app. */
+    static List<String> candidates(String discoveryJson, SharedPreferences sp) {
+        List<String> list = new ArrayList<>();
+        String ip = "";
+        try {
+            if (discoveryJson != null && !discoveryJson.isEmpty()) {
+                org.json.JSONObject j = new org.json.JSONObject(discoveryJson);
+                String f = clean(j.optString("panel", "")); if (!f.isEmpty() && !list.contains(f)) list.add(f);
+                org.json.JSONArray a = j.optJSONArray("panels");
+                if (a != null) for (int i = 0; i < a.length() && i < 5; i++) { String d = clean(a.optString(i, "")); if (!d.isEmpty() && !list.contains(d)) list.add(d); }
+                ip = cleanIp(j.optString("ip", ""));
+            }
+        } catch (Exception ignored) {}
+        String last = clean(sp.getString("panel", ""));
+        if (!last.isEmpty() && !list.contains(last)) list.add(last);
+        String def = clean(PANEL);
+        if (!def.isEmpty() && !list.contains(def)) list.add(def);
+        for (int i = 0; i < PANELS.length && i < 5; i++) { String d = clean(PANELS[i]); if (!d.isEmpty() && !list.contains(d)) list.add(d); }
+        if (!ip.isEmpty() && !list.contains(ip)) list.add(ip);
+        String cip = cleanIp(PANEL_IP);
+        if (!cip.isEmpty() && !list.contains(cip)) list.add(cip);
+        // o último endereço salvo pode ser o IP (quando só ele funcionava): tenta também, no fim
+        String lastIp = cleanIp(sp.getString("panel", ""));
+        if (!lastIp.isEmpty() && !list.contains(lastIp)) list.add(lastIp);
+        return list;
+    }
+
     private static String http(String u, int ms) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(u).openConnection();
         c.setConnectTimeout(ms); c.setReadTimeout(ms);
@@ -435,9 +474,9 @@ public class MainActivity extends Activity {
         try {
             HttpURLConnection c = (HttpURLConnection) new URL(panel + "/api/public/player-config" + (OWNER.isEmpty() ? "" : "?owner=" + OWNER)).openConnection();
             c.setConnectTimeout(8000); c.setReadTimeout(8000);
-            c.getResponseCode(); // qualquer resposta = servidor no ar
+            int code = c.getResponseCode(); // qualquer resposta = servidor no ar (no IP em http exige resposta boa: um 404 do proxy não é o painel)
             c.disconnect();
-            return true;
+            return panel.startsWith("https://") || code < 400;
         } catch (Exception e) { return false; }
     }
 
@@ -447,17 +486,9 @@ public class MainActivity extends Activity {
         splash.setVisibility(View.VISIBLE);
         new Thread(() -> {
             SharedPreferences sp = getSharedPreferences("plustv", MODE_PRIVATE);
-            List<String> list = new ArrayList<>();
-            if (!DISCOVERY.isEmpty()) {
-                try {
-                    Matcher m = Pattern.compile("\"panel\"\\s*:\\s*\"([^\"]+)\"").matcher(http(DISCOVERY, 6000));
-                    if (m.find()) { String f = clean(m.group(1)); if (!f.isEmpty()) list.add(f); }
-                } catch (Exception ignored) {}
-            }
-            String last = clean(sp.getString("panel", ""));
-            if (!last.isEmpty() && !list.contains(last)) list.add(last);
-            String def = clean(PANEL);
-            if (!def.isEmpty() && !list.contains(def)) list.add(def);
+            String disc = "";
+            if (!DISCOVERY.isEmpty()) { try { disc = http(DISCOVERY, 6000); } catch (Exception ignored) {} }
+            List<String> list = candidates(disc, sp);
             for (String p : list) {
                 if (alive(p)) {
                     sp.edit().putString("panel", p).apply();

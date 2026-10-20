@@ -105,13 +105,11 @@ public class NLogin extends Activity {
         msg.setText("");
         new Thread(() -> {
             SharedPreferences sp = getSharedPreferences("plustv", MODE_PRIVATE);
-            List<String> panels = new ArrayList<>();
-            String last = sp.getString("panel", "");
-            if (last.startsWith("https://")) panels.add(last);
-            if (!panels.contains(MainActivity.PANEL)) panels.add(MainActivity.PANEL);
+            String disc = "";
+            try { disc = Net.get(MainActivity.DISCOVERY, false, 6000); } catch (Exception ignored) {}
+            List<String> panels = MainActivity.candidates(disc, sp);
             String err = "Sem conexão. Confira a internet e tente de novo.";
             Net.Sess found = null;
-            boolean discovered = false;
             for (int i = 0; i < panels.size() && found == null; i++) {
                 String panel = panels.get(i);
                 try {
@@ -131,13 +129,6 @@ public class NLogin extends Activity {
                         break; // o painel respondeu: o problema é o login, não a conexão
                     }
                 } catch (Exception e) { /* tenta o próximo endereço */ }
-                if (i == panels.size() - 1 && !discovered && found == null) {
-                    discovered = true;
-                    try {
-                        Matcher m = Pattern.compile("\"panel\"\\s*:\\s*\"([^\"]+)\"").matcher(Net.get(MainActivity.DISCOVERY, false, 6000));
-                        if (m.find()) { String f = m.group(1).trim().replaceAll("/+$", ""); if (f.startsWith("https://") && !panels.contains(f)) panels.add(f); }
-                    } catch (Exception ignored) {}
-                }
             }
             final Net.Sess ok = found;
             final String er = err;
