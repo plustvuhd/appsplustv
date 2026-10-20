@@ -48,6 +48,8 @@ public class MainActivity extends Activity {
     static final String DISCOVERY = "https://raw.githubusercontent.com/plustvuhd/plustv-config/main/plustv.json";
     // (Opcional) link do player de um servidor, ex.: "meu-nome". Vazio = player padrão do painel.
     static final String OWNER = "";
+    // Marca fixa do app na tela de login (ex.: "txgold"). Vazio = PlusTV.
+    static final String BRAND = "";
     // ==========================================================
 
     private FrameLayout root;
@@ -460,7 +462,7 @@ public class MainActivity extends Activity {
                 if (alive(p)) {
                     sp.edit().putString("panel", p).apply();
                     fetchLogo(p);
-                    final String url = p + "/player" + (OWNER.isEmpty() ? "" : "/" + OWNER) + "?tv=android";
+                    final String url = p + "/player" + (OWNER.isEmpty() ? "" : "/" + OWNER) + "?tv=android" + (BRAND.isEmpty() ? "" : "&brand=" + BRAND);
                     runOnUiThread(() -> web.loadUrl(url));
                     return;
                 }
