@@ -127,7 +127,7 @@ public class LiveScreen extends Screen {
             @Override public void onNothingSelected(AdapterView<?> p) {}
         });
         chList.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override public void onItemSelected(AdapterView<?> p, View v, int pos, long id) { home.ui.removeCallbacks(previewRun); home.ui.postDelayed(previewRun, 650); }
+            @Override public void onItemSelected(AdapterView<?> p, View v, int pos, long id) { home.ui.removeCallbacks(previewRun); home.ui.postDelayed(previewRun, 400); }
             @Override public void onNothingSelected(AdapterView<?> p) {}
         });
         chList.setOnItemClickListener((p, v, pos, id) -> openFull(pos));
@@ -334,8 +334,8 @@ public class LiveScreen extends Screen {
         if (exo != null) return;
         DefaultHttpDataSource.Factory http = new DefaultHttpDataSource.Factory()
             .setUserAgent(Net.UA).setAllowCrossProtocolRedirects(true).setConnectTimeoutMs(12000).setReadTimeoutMs(15000);
-        DefaultLoadControl lc = new DefaultLoadControl.Builder().setBufferDurationsMs(10000, 30000, 1000, 2500).build();
-        exo = new ExoPlayer.Builder(home).setMediaSourceFactory(new DefaultMediaSourceFactory(http)).setLoadControl(lc).build();
+        DefaultLoadControl lc = new DefaultLoadControl.Builder().setBufferDurationsMs(5000, 20000, 500, 1500).build();
+        exo = new ExoPlayer.Builder(home).setMediaSourceFactory(new DefaultMediaSourceFactory(http)).setLoadControl(lc).setReleaseTimeoutMs(400).build();
         exo.setVideoTextureView(tex);
         exo.addListener(new Player.Listener() {
             @Override public void onPlaybackStateChanged(int st) { if (st == Player.STATE_READY) prevMsg.setVisibility(View.GONE); }

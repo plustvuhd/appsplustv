@@ -230,7 +230,8 @@ public class PlayerActivity extends Activity {
     private final Runnable ticker = new Runnable() {
         @Override public void run() {
             if (finished) return;
-            long p = pos(), d = dur();
+            // só consulta o motor depois que o vídeo começou (durante o carregamento o VLC pode bloquear a thread principal)
+            long p = playedOnce ? pos() : 0, d = playedOnce ? dur() : 0;
             if (p > 0) lastPos = p;
             if (d > 0) lastDur = d;
             updateSkip(p, d);
@@ -560,7 +561,7 @@ public class PlayerActivity extends Activity {
         h.removeCallbacks(dotsAnim);
         h.post(dotsAnim);
         h.removeCallbacks(timeout);
-        h.postDelayed(timeout, 25000);
+        h.postDelayed(timeout, 15000);
         try {
             if ("exo".equals(c[0])) startExo(c[1]); else startVlc(c[1]);
         } catch (Throwable t) { h.post(this::tryNext); }
@@ -615,7 +616,7 @@ public class PlayerActivity extends Activity {
         // Mesma configuração padrão do ExoPlayer externo (que não trava): carregamento, buffer, extratores e decodificador no padrão da biblioteca.
         DefaultLoadControl lc = new DefaultLoadControl.Builder().build();
         androidx.media3.exoplayer.DefaultRenderersFactory rf = new androidx.media3.exoplayer.DefaultRenderersFactory(this).setEnableDecoderFallback(true);
-        exo = new ExoPlayer.Builder(this, rf).setMediaSourceFactory(new DefaultMediaSourceFactory(http)).setLoadControl(lc).build();
+        exo = new ExoPlayer.Builder(this, rf).setMediaSourceFactory(new DefaultMediaSourceFactory(http)).setLoadControl(lc).setReleaseTimeoutMs(400).build();
         exo.setSeekParameters(SeekParameters.CLOSEST_SYNC); // avançar/voltar vai para o quadro-chave mais perto (bem mais rápido)
         exoView.setPlayer(exo);
         MediaItem.Builder mib = new MediaItem.Builder().setUri(Uri.parse(url));
@@ -706,12 +707,26 @@ public class PlayerActivity extends Activity {
     }
 
     private void releaseEngines() {
-        try { if (exo != null) { exoView.setPlayer(null); exo.release(); } } catch (Throwable ignored) {}
-        exo = null;
-        try { if (vlc != null) { vlc.setEventListener(null); vlc.stop(); vlc.detachViews(); vlc.release(); } } catch (Throwable ignored) {}
-        vlc = null;
-        try { if (libVlc != null) libVlc.release(); } catch (Throwable ignored) {}
-        libVlc = null;
+        // Soltar o player em outra thread: com o canal travado/sem rede, o stop()/release() do VLC e do
+        // Exo pode bloquear por muito tempo — e na thread principal isso deixava a tela girando e o
+        // botão voltar sem resposta. Aqui só desligamos as views (rápido) e o resto roda por trás.
+        final androidx.media3.exoplayer.ExoPlayer e = exo;
+        final org.videolan.libvlc.MediaPlayer v = vlc;
+        final org.videolan.libvlc.LibVLC lv = libVlc;
+        exo = null; vlc = null; libVlc = null;
+        try { if (e != null) { e.setPlayWhenReady(false); exoView.setPlayer(null); } } catch (Throwable ignored) {}
+        // ExoPlayer (media3) só aceita chamadas na thread principal: soltar de outra thread lançava exceção (engolida) e o
+        // player ficava aberto — decodificador e conexão com o servidor vazavam, deixando os canais seguintes lentos/travados.
+        // O release() do Exo já tem tempo máximo curto (setReleaseTimeoutMs), então é seguro aqui.
+        try { if (e != null) e.release(); } catch (Throwable ignored) {}
+        try { if (v != null) { v.setEventListener(null); v.detachViews(); } } catch (Throwable ignored) {}
+        if (v == null && lv == null) return;
+        Thread t = new Thread(() -> {
+            try { if (v != null) { v.stop(); v.release(); } } catch (Throwable ignored) {}
+            try { if (lv != null) lv.release(); } catch (Throwable ignored) {}
+        }, "player-release");
+        t.setDaemon(true);
+        t.start();
     }
 
     private long pos() {
@@ -846,7 +861,7 @@ public class PlayerActivity extends Activity {
         if (ev.getAction() != KeyEvent.ACTION_DOWN) return true;
         if ((k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER) && skipVisible()) { skipIntro(); return true; }
         switch (k) {
-            case KeyEvent.KEYCODE_BACK: finishWith(false, false); return true;
+            case KeyEvent.KEYCODE_BACK: if (finished) { finish(); return true; } finishWith(false, false); return true;
             case KeyEvent.KEYCODE_DPAD_CENTER:
             case KeyEvent.KEYCODE_ENTER:
                 // Barra escondida: OK só mostra a barra (não pausa). Barra visível: OK pausa/continua.
@@ -895,12 +910,18 @@ public class PlayerActivity extends Activity {
 
     private void finishWith(boolean ended, boolean err) {
         if (finished) return;
-        long p = pos(), d = dur();
-        if (p > 0) lastPos = p;
-        if (d > 0) lastDur = d;
+        // Voltar nunca pode esperar o motor de vídeo: com o canal ainda carregando (bolinha girando) o getTime() do VLC pode
+        // bloquear a thread principal. Canal ao vivo não precisa de posição; o resto usa o último valor guardado pelo ticker.
+        try {
+            if (!live && (exo != null || playedOnce)) {
+                long p = pos(), d = dur();
+                if (p > 0) lastPos = p;
+                if (d > 0) lastDur = d;
+            }
+        } catch (Throwable ignored) {}
         finished = true;
         h.removeCallbacksAndMessages(null);
-        sendWatch(true);
+        try { sendWatch(true); } catch (Throwable ignored) {}
         Intent r = new Intent();
         r.putExtra("pos", err ? 0 : lastPos);
         r.putExtra("dur", err ? 0 : lastDur);
@@ -908,8 +929,8 @@ public class PlayerActivity extends Activity {
         r.putExtra("err", err);
         r.putExtra("fit", fitMode == 0 ? "contain" : fitMode == 2 ? "fill" : "cover");
         setResult(RESULT_OK, r);
-        releaseEngines();
         finish();
+        try { releaseEngines(); } catch (Throwable ignored) {}
     }
 
     @Override protected void onPause() {
