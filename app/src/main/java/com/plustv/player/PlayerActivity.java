@@ -288,7 +288,7 @@ public class PlayerActivity extends Activity {
                 || getPackageManager().hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK);
         } catch (Throwable ignored) {}
         if ("swap".equals(engine)) engine = tvBox ? "exo" : "vlc";
-        else if ("auto".equals(engine) && tvBox) engine = "vlc";
+        else if ("auto".equals(engine) && tvBox) engine = "exo"; // padrão: ExoPlayer em todos os aparelhos (cai para o VLC sozinho se não abrir)
         String[] order;
         if ("vlc".equals(engine)) order = new String[]{"vlc", "exo"};
         else if ("exo".equals(engine)) order = new String[]{"exo", "vlc"};
@@ -561,7 +561,7 @@ public class PlayerActivity extends Activity {
         h.removeCallbacks(dotsAnim);
         h.post(dotsAnim);
         h.removeCallbacks(timeout);
-        h.postDelayed(timeout, 15000);
+        h.postDelayed(timeout, 25000);
         try {
             if ("exo".equals(c[0])) startExo(c[1]); else startVlc(c[1]);
         } catch (Throwable t) { h.post(this::tryNext); }

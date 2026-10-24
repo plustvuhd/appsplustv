@@ -110,7 +110,7 @@ public class NHome extends Activity {
     // ---------- preferências ----------
     public SharedPreferences prefs() { return getSharedPreferences("plustv", MODE_PRIVATE); }
     public String fmt() { return "hls".equals(prefs().getString("n_fmt", "ts")) ? "hls" : "ts"; }
-    public String engine() { String e = prefs().getString("n_engine", "auto"); return "vlc".equals(e) ? "vlc" : "exo".equals(e) ? "exo" : "auto"; }
+    public String engine() { String e = prefs().getString("n_engine", "exo"); return "vlc".equals(e) ? "vlc" : "exo"; }
     public boolean showAdult() { return prefs().getBoolean("n_adult", false); }
 
     // ---------- PIN, pastas ocultas e travadas (mesma ideia do Web Player) ----------
