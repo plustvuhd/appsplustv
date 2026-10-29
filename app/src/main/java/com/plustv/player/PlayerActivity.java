@@ -312,6 +312,9 @@ public class PlayerActivity extends Activity {
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
         setContentView(root);
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            try { getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, () -> { if (finished) finish(); else finishWith(false, false); }); } catch (Throwable ignored) {}
+        }
 
         exoView = new PlayerView(this);
         exoView.setUseController(false);
@@ -336,7 +339,8 @@ public class PlayerActivity extends Activity {
         LinearLayout ov = new LinearLayout(this);
         ov.setOrientation(LinearLayout.VERTICAL);
         ov.setBackground(new android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0x00000000, 0xD9000000, 0xF2000000}));
-        ov.setPadding(dp(56), dp(90), dp(56), dp(30));
+        final boolean narrow = getResources().getDisplayMetrics().widthPixels < dp(700);
+        ov.setPadding(narrow ? dp(16) : dp(56), dp(90), narrow ? dp(16) : dp(56), dp(30));
         LinearLayout top = new LinearLayout(this);
         top.setOrientation(LinearLayout.HORIZONTAL);
         top.setGravity(Gravity.CENTER_VERTICAL);
@@ -399,10 +403,11 @@ public class PlayerActivity extends Activity {
                 TextView pill = new Tr.TV(this);
                 pill.setText(fitLabel());
                 pill.setTextColor(Color.WHITE);
-                pill.setTextSize(17);
+                pill.setTextSize(narrow ? 14 : 17);
+                pill.setSingleLine(true);
                 pill.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
                 pill.setGravity(Gravity.CENTER);
-                pill.setPadding(dp(22), dp(10), dp(22), dp(10));
+                pill.setPadding(narrow ? dp(12) : dp(22), dp(10), narrow ? dp(12) : dp(22), dp(10));
                 android.graphics.drawable.GradientDrawable pg = new android.graphics.drawable.GradientDrawable();
                 pg.setColor(0x33FFFFFF); pg.setCornerRadius(dp(30));
                 pill.setBackground(pg);
@@ -427,7 +432,7 @@ public class PlayerActivity extends Activity {
             });
             int sz = i == 1 ? dp(66) : dp(54);
             LinearLayout.LayoutParams lp = i == 3 ? new LinearLayout.LayoutParams(-2, -2) : new LinearLayout.LayoutParams(sz, sz);
-            lp.leftMargin = dp(12); lp.rightMargin = dp(12);
+            lp.leftMargin = narrow ? dp(6) : dp(12); lp.rightMargin = narrow ? dp(6) : dp(12);
             row.addView(t, lp);
         }
         ov.addView(row, new LinearLayout.LayoutParams(-1, -2));
@@ -932,6 +937,8 @@ public class PlayerActivity extends Activity {
         finish();
         try { releaseEngines(); } catch (Throwable ignored) {}
     }
+
+    @Override public void onBackPressed() { if (finished) finish(); else finishWith(false, false); }
 
     @Override protected void onPause() {
         super.onPause();

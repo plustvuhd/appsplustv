@@ -262,7 +262,7 @@ public class MainActivity extends Activity {
         long pos = data != null ? data.getLongExtra("pos", 0) : 0;
         long dur = data != null ? data.getLongExtra("dur", 0) : 0;
         boolean ended = data != null && data.getBooleanExtra("ended", false);
-        boolean err = data == null || data.getBooleanExtra("err", false);
+        boolean err = data != null && data.getBooleanExtra("err", false); // sem dados = player fechado pelo Voltar (não é erro: antes abria o player do navegador com a roda girando)
         String fit = data != null && data.getStringExtra("fit") != null ? data.getStringExtra("fit") : "cover";
         web.evaluateJavascript("window.__wpNativeEnd&&window.__wpNativeEnd({pos:" + pos + ",dur:" + dur + ",ended:" + ended + ",err:" + err + ",fit:'" + fit + "'})", null);
         web.requestFocus();
@@ -286,6 +286,11 @@ public class MainActivity extends Activity {
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.parseColor("#0b0a14"));
         setContentView(root);
+        // Android 13+ (e principalmente o 16, com targetSdk 36): o gesto/botão Voltar NÃO chega mais como tecla nem em onBackPressed, só por este callback.
+        // Sem isso o Voltar fechava o app em vez de voltar uma tela dentro da página.
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            try { getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack); } catch (Throwable ignored) {}
+        }
 
         web = new WebView(this);
         web.setBackgroundColor(Color.parseColor("#0b0a14"));
@@ -527,6 +532,18 @@ public class MainActivity extends Activity {
         customCb = null;
         web.requestFocus();
     }
+
+    /** Voltar (gesto ou botão): primeiro a própria página (player → sinopse → lista → início); só fecha o app se a página não tratar. */
+    private void handleBack() {
+        if (customView != null) { hideCustom(); return; }
+        if (!pageOk || web == null) { finish(); return; }
+        if (err != null && err.getVisibility() == View.VISIBLE) { finish(); return; }
+        web.evaluateJavascript("(function(){var e=new CustomEvent('wp-back',{detail:{handled:false}});window.dispatchEvent(e);return e.detail.handled})()",
+            v -> { if (!"true".equals(v)) finish(); });
+    }
+
+    @Override
+    public void onBackPressed() { handleBack(); }
 
     private void sendKey(int code) {
         web.evaluateJavascript("(function(){var e=new KeyboardEvent('keydown',{keyCode:" + code + ",which:" + code + ",bubbles:true,cancelable:true});(document.activeElement||document.body).dispatchEvent(e);})()", null);
