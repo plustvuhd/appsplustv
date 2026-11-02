@@ -1,0 +1,32 @@
+name: Gerar AAB para a Google Play
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  aab:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.11.1
+      - name: Chave de upload (secrets do GitHub: LOJA_KEYSTORE_B64, LOJA_STORE_PASS, LOJA_KEY_ALIAS, LOJA_KEY_PASS)
+        env:
+          KS: ${{ secrets.LOJA_KEYSTORE_B64 }}
+        run: echo "$KS" | base64 -d > "$RUNNER_TEMP/loja.keystore"
+      - name: Gerar AAB (só ARM, sem VLC)
+        env:
+          LOJA_KEYSTORE: ${{ runner.temp }}/loja.keystore
+          LOJA_STORE_PASS: ${{ secrets.LOJA_STORE_PASS }}
+          LOJA_KEY_ALIAS: ${{ secrets.LOJA_KEY_ALIAS }}
+          LOJA_KEY_PASS: ${{ secrets.LOJA_KEY_PASS }}
+        run: gradle bundleLojaRelease --no-daemon -Pabis=armeabi-v7a,arm64-v8a
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PlusTV-loja-aab
+          path: app/build/outputs/bundle/lojaRelease/*.aab
