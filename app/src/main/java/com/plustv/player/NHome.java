@@ -39,6 +39,8 @@ public class NHome extends Activity {
     private int cur = -1;
     private long backAt = 0;
 
+    @Override public void onWindowFocusChanged(boolean f) { super.onWindowFocusChanged(f); if (f) UI.immersive(this); }
+
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
         I18n.init(this);

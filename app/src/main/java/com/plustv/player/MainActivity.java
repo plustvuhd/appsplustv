@@ -47,7 +47,7 @@ public class MainActivity extends Activity {
     // Até 5 domínios de reserva (https). O app tenta na ordem; PANEL acima é o primeiro.
     static final String[] PANELS = { "https://eletronicosplus.shop", "https://plustvxc.shop", "https://plustvplayxc.online", "", "" };
     // IP direto da VPS (último recurso, só se o GitHub e todos os domínios falharem). Ex.: "http://123.45.67.89:3000". Vazio = desligado.
-    static final String PANEL_IP = "http://72.61.128.111";
+    static final String PANEL_IP = "";
     // Arquivo JSON {"panel":"https://..."} num lugar fixo (GitHub raw). Mudou o domínio? Edite só esse arquivo. "" desativa.
     static final String DISCOVERY = "https://raw.githubusercontent.com/plustvuhd/plustv-config/main/plustv.json";
     // (Opcional) link do player de um servidor, ex.: "meu-nome". Vazio = player padrão do painel.
@@ -267,6 +267,8 @@ public class MainActivity extends Activity {
         web.evaluateJavascript("window.__wpNativeEnd&&window.__wpNativeEnd({pos:" + pos + ",dur:" + dur + ",ended:" + ended + ",err:" + err + ",fit:'" + fit + "'})", null);
         web.requestFocus();
     }
+
+    @Override public void onWindowFocusChanged(boolean f) { super.onWindowFocusChanged(f); if (f) UI.immersive(this); }
 
     @Override
     protected void onCreate(Bundle b) {

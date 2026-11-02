@@ -39,6 +39,8 @@ public class NDetail extends Activity {
 
     static class Ep { String id, title, ext; int season, num; }
 
+    @Override public void onWindowFocusChanged(boolean f) { super.onWindowFocusChanged(f); if (f) UI.immersive(this); }
+
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
         I18n.init(this);
@@ -247,8 +249,28 @@ public class NDetail extends Activity {
         return null;
     }
 
+    private boolean hasProg(long[] p) { return p[0] > 30000 && (p[1] <= 0 || p[0] < p[1] - 45000); }
+
+    /** Já assistiu parte: sempre pergunta se continua de onde parou ou recomeça. */
+    private void askResume(String title, final long pos, final Runnable cont, final Runnable fresh) {
+        try {
+            android.app.AlertDialog d = new android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle(I18n.t("Continuar de onde parou?"))
+                .setMessage(title + "\n" + I18n.t("Você parou em ") + fmt(pos))
+                .setPositiveButton(I18n.t("Continuar") + " (" + fmt(pos) + ")", (dd, w) -> cont.run())
+                .setNegativeButton(I18n.t("Recomeçar"), (dd, w) -> fresh.run())
+                .create();
+            d.show();
+            try { d.getButton(android.app.AlertDialog.BUTTON_POSITIVE).requestFocus(); } catch (Throwable ignored) {}
+        } catch (Throwable t) { cont.run(); }
+    }
+
     private void playMain() {
-        if ("movie".equals(kind)) { long[] p = prog("movie", id); playMovie(p[0] > 30000 && (p[1] <= 0 || p[0] < p[1] - 45000) ? p[0] : 0); }
+        if ("movie".equals(kind)) {
+            final long[] p = prog("movie", id);
+            if (hasProg(p)) askResume(name, p[0], () -> playMovie(p[0]), () -> { saveProg("movie", id, 0, p[1], false); playMovie(0); });
+            else playMovie(0);
+        }
         else {
             if (eps.isEmpty()) { I18n.mk(this, "Aguarde carregar os episódios", Toast.LENGTH_SHORT).show(); return; }
             Ep e = lastEp();
@@ -265,9 +287,12 @@ public class NDetail extends Activity {
     private void playEp(Ep e, boolean resume) {
         playing = e;
         getSharedPreferences("plustv", MODE_PRIVATE).edit().putString("n_last_" + id, e.id).apply();
-        long[] p = prog("series", e.id);
-        long start = resume && p[0] > 30000 && (p[1] <= 0 || p[0] < p[1] - 45000) ? p[0] : 0;
-        launch(sess.seriesUrl(e.id, e.ext), name + "  T" + e.season + " E" + e.num, start);
+        final long[] p = prog("series", e.id);
+        final String ttl = name + "  T" + e.season + " E" + e.num;
+        final String url = sess.seriesUrl(e.id, e.ext);
+        final String eid = e.id;
+        if (resume && hasProg(p)) askResume(ttl, p[0], () -> launch(url, ttl, p[0]), () -> { saveProg("series", eid, 0, p[1], false); launch(url, ttl, 0); });
+        else launch(url, ttl, 0);
     }
 
     private void launch(String url, String title, long startMs) {

@@ -17,6 +17,25 @@ public final class UI {
 
     public static final int BG = 0xFF0B0A14, CARD = 0xFF17152A, CARD2 = 0xFF211E3A, ACC = 0xFF8B5CF6, TXT = 0xFFFFFFFF, MUTED = 0xFFA9A3C9, RED = 0xFFE5383B;
 
+    /** Tela cheia de verdade: esconde a barra de navegação/status do sistema (alguns TV box mostram uma barra com voltar/início/volume embaixo). Reaparece só ao deslizar a borda e some de novo. */
+    @SuppressWarnings("deprecation")
+    public static void immersive(android.app.Activity a) {
+        try {
+            android.view.Window w = a.getWindow();
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                android.view.WindowInsetsController c = w.getInsetsController();
+                if (c != null) {
+                    c.hide(android.view.WindowInsets.Type.statusBars() | android.view.WindowInsets.Type.navigationBars());
+                    c.setSystemBarsBehavior(android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                    return;
+                }
+            }
+            w.getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        } catch (Throwable ignored) {}
+    }
+
     /** Largura útil da tela em dp (TV ~960, celular deitado ~650). */
     public static int widthDp(Context c) { android.util.DisplayMetrics m = c.getResources().getDisplayMetrics(); return Math.round(m.widthPixels / m.density); }
     /** Largura proporcional à tela, limitada entre min e max (dp). */

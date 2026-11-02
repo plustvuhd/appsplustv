@@ -26,6 +26,8 @@ public class NLogin extends Activity {
     private TextView msg, btn;
     private boolean busy = false;
 
+    @Override public void onWindowFocusChanged(boolean f) { super.onWindowFocusChanged(f); if (f) UI.immersive(this); }
+
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
         I18n.init(this);

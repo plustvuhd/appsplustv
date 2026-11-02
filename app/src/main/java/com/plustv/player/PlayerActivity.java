@@ -128,6 +128,8 @@ public class PlayerActivity extends Activity {
     private boolean finished = false;
     private boolean playedOnce = false;
     private boolean seekedStart = false;
+    private long seekTarget = -1, seekAt = 0; // último destino pedido pela barra: se o motor cair/reabrir logo depois, volta para ELE (não para a posição antiga nem 0)
+    private int seekReopens = 0;
     private long lastPos = 0, lastDur = 0;
 
     private ExoPlayer exo;
@@ -256,6 +258,8 @@ public class PlayerActivity extends Activity {
             h.postDelayed(this, 500);
         }
     };
+
+    @Override public void onWindowFocusChanged(boolean f) { super.onWindowFocusChanged(f); if (f) UI.immersive(this); }
 
     @Override
     protected void onCreate(Bundle b) {
@@ -577,7 +581,7 @@ public class PlayerActivity extends Activity {
         if (finished) return;
         if (!live && playedOnce && retries < 4 && idx >= 0 && idx < combos.size()) {
             retries++;
-            long at = pending >= 0 ? pending : Math.max(pos(), lastPos);
+            long at = pending >= 0 ? pending : (seekTarget >= 0 && System.currentTimeMillis() - seekAt < 30000 ? seekTarget : Math.max(pos(), lastPos));
             pending = -1;
             startMs = at;
             final int again = idx - 1; // tryNext incrementa
@@ -769,8 +773,30 @@ public class PlayerActivity extends Activity {
         seekToMs(Math.max(introEnd, pos() + 10000));
     }
     private void seekToMs(long t) {
+        seekTarget = t; seekAt = System.currentTimeMillis(); seekReopens = 0;
         try { if (exo != null) exo.seekTo(t); else if (vlc != null) vlc.setTime(t); } catch (Throwable ignored) {}
+        h.removeCallbacks(verifySeek);
+        if (!live) h.postDelayed(verifySeek, 6000);
     }
+
+    /** 6 s depois de avançar/voltar: se o vídeo está tocando mas continua longe do destino (servidor ignorou o pedido), reabre o mesmo filme já na posição escolhida. */
+    private final Runnable verifySeek = () -> {
+        if (finished || live || seekTarget < 0) return;
+        try {
+            long p = pos();
+            boolean playing = exo != null ? exo.getPlaybackState() == Player.STATE_READY : vlc != null && vlc.isPlaying();
+            if (Math.abs(p - seekTarget) <= 20000) { seekTarget = -1; return; }
+            if (!playing) { h.postDelayed(this.verifySeek, 3000); return; }
+            if (seekReopens < 2 && idx >= 0 && idx < combos.size()) {
+                seekReopens++;
+                startMs = seekTarget;
+                final int again = idx - 1;
+                tuning(true);
+                h.removeCallbacks(timeout);
+                h.postDelayed(() -> { if (finished) return; idx = again; tryNext(); }, 300);
+            }
+        } catch (Throwable ignored) {}
+    };
 
     private void nudge(long delta) {
         if (live) return;
@@ -791,10 +817,7 @@ public class PlayerActivity extends Activity {
         long d = dur();
         long t = Math.max(0, pos() + delta);
         if (d > 0) t = Math.min(t, d - 1000);
-        try {
-            if (exo != null) exo.seekTo(t);
-            else if (vlc != null) vlc.setTime(t);
-        } catch (Throwable ignored) {}
+        seekToMs(t);
     }
 
     /** Proporção da imagem: Ajustar / Preencher / Esticar (cima no controle alterna). */
@@ -881,10 +904,8 @@ public class PlayerActivity extends Activity {
                 try { if (exo != null) exo.setPlayWhenReady(false); else if (vlc != null) vlc.pause(); } catch (Throwable ignored) {}
                 showOverlay(); return true;
             case KeyEvent.KEYCODE_DPAD_LEFT:
-                if (overlay.getVisibility() != View.VISIBLE) { showOverlay(); return true; }
                 nudge(ev.getRepeatCount() > 3 ? -30000 : -10000); showOverlay(); return true;
             case KeyEvent.KEYCODE_DPAD_RIGHT:
-                if (overlay.getVisibility() != View.VISIBLE) { showOverlay(); return true; }
                 nudge(ev.getRepeatCount() > 3 ? 30000 : 10000); showOverlay(); return true;
             case KeyEvent.KEYCODE_MEDIA_REWIND: nudge(-30000); showOverlay(); return true;
             case KeyEvent.KEYCODE_MEDIA_FAST_FORWARD: nudge(30000); showOverlay(); return true;
